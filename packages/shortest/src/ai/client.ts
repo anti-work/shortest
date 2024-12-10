@@ -12,6 +12,10 @@ export class AIClient {
   private debugMode: boolean;
 
   constructor(config: AIConfig, debugMode: boolean = false) {
+    if (!config.apiKey) {
+      throw new Error('Anthropic API key is required. Set it in shortest.config.ts or ANTHROPIC_API_KEY env var');
+    }
+
     this.client = new Anthropic({
       apiKey: config.apiKey
     });

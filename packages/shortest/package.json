@@ -1,6 +1,6 @@
 {
   "name": "@antiwork/shortest",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "AI-powered natural language end-to-end testing framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -46,8 +46,7 @@
     "tsx": "^4.7.1",
     "typescript": "~5.6.2",
     "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.24",
-    "playwright": "1.48.2"
+    "@types/node": "^20.11.24"
   },
   "engines": {
     "node": ">=18"

@@ -1,11 +1,11 @@
 import { BrowserManager } from '../src/browser/manager';
 import { BrowserTool } from '../src/browser/core/browser-tool';
 import { GitHubTool } from '../src/browser/integrations/github';
-import { initialize } from '../src/index';
+import { getConfig, initialize } from '../src/index';
 import pc from 'picocolors';
 
 async function testGithubLogin() {
-  const browserManager = new BrowserManager();
+  const browserManager = new BrowserManager(getConfig());
   const githubTool = new GitHubTool();
 
   try {

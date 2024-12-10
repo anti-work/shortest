@@ -1,10 +1,10 @@
 import { BrowserManager } from '../src/browser/manager';
 import { BrowserTool } from '../src/browser/core/browser-tool';
-import { initialize } from '../src/index';
+import { getConfig, initialize } from '../src/index';
 import pc from 'picocolors';
 
 async function testBrowser() {
-  const browserManager = new BrowserManager();
+  const browserManager = new BrowserManager(getConfig());
 
   try {
     await initialize();

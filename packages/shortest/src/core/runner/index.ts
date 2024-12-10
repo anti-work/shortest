@@ -23,7 +23,7 @@ export class TestRunner {
   private forceHeadless: boolean;
   private targetUrl: string | undefined;
   private compiler: TestCompiler;
-  private browserManager: BrowserManager;
+  private browserManager!: BrowserManager;
   private logger: Logger;
   private debugAI: boolean;
 
@@ -40,43 +40,30 @@ export class TestRunner {
     this.targetUrl = targetUrl;
     this.debugAI = debugAI;
     this.compiler = new TestCompiler();
-    this.browserManager = new BrowserManager();
     this.logger = new Logger();
   }
 
   async initialize() {
-    await this.initializeConfig();
-  }
+    // Initialize global config first
+    await initialize();
+    this.config = getConfig();
 
-  private async initializeConfig() {
-    const configFiles = [
-      'shortest.config.ts',
-      'shortest.config.js',
-      'shortest.config.mjs'
-    ];
-
-    for (const file of configFiles) {
-      try {
-        const module = await this.compiler.loadModule(file, this.cwd);
-        if (module.default) {
-          this.config = module.default;
-          
-          if (this.forceHeadless) {
-            this.config.headless = true;
-          }
-
-          if (this.targetUrl) {
-            this.config.baseUrl = this.targetUrl;
-          }
-          
-          return;
-        }
-      } catch (error) {
-        continue;
-      }
+    // Override with CLI options
+    if (this.forceHeadless) {
+      this.config = {
+        ...this.config,
+        headless: true
+      };
     }
 
-    this.config = getConfig();
+    if (this.targetUrl) {
+      this.config = {
+        ...this.config,
+        baseUrl: this.targetUrl
+      };
+    }
+
+    this.browserManager = new BrowserManager(this.config);
   }
 
   private async findTestFiles(pattern?: string): Promise<string[]> {
@@ -127,13 +114,8 @@ export class TestRunner {
       }
     });
 
-    const apiKey = this.config.anthropicKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error('Anthropic API key not found');
-    }
-
     const aiClient = new AIClient({
-      apiKey,
+      apiKey: this.config.anthropicKey,
       model: 'claude-3-5-sonnet-20241022',
       maxMessages: 10,
       debug: this.debugAI

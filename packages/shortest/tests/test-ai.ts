@@ -1,7 +1,7 @@
 import { AIClient } from '../src/ai/client';
 import { BrowserTool } from '../src/browser/core/browser-tool';
 import { BrowserManager } from '../src/browser/manager';
-import { initialize } from '../src/index';
+import { getConfig, initialize } from '../src/index';
 import type { TestFunction } from '../src/types/test';
 import pc from 'picocolors';
 
@@ -9,7 +9,7 @@ async function testAI() {
   console.log(pc.cyan('\n🧪 Testing AI Integration'));
   console.log(pc.cyan('======================='));
 
-  const browserManager = new BrowserManager();
+  const browserManager = new BrowserManager(getConfig());
 
   try {
     await initialize();

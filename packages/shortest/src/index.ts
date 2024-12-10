@@ -8,12 +8,11 @@ import {
   TestContext,
   TestChain,
   ShortestConfig,
-  defaultConfig,
   TestHookFunction
 } from './types';
 
 // Initialize config
-let config: ShortestConfig = defaultConfig;
+let globalConfig: ShortestConfig | null = null;
 const compiler = new TestCompiler();
 
 // Initialize shortest namespace and globals
@@ -42,7 +41,25 @@ if (!global.__shortest__) {
   dotenv.config({ path: join(process.cwd(), '.env.local') });
 }
 
+function validateConfig(config: Partial<ShortestConfig>) {
+  const missingFields: string[] = [];
+  
+  if (config.headless === undefined) missingFields.push('headless');
+  if (!config.baseUrl) missingFields.push('baseUrl');
+  if (!config.testDir) missingFields.push('testDir');
+  if (!config.anthropicKey && !process.env.ANTHROPIC_API_KEY) missingFields.push('anthropicKey');
+
+  if (missingFields.length > 0) {
+    throw new Error(
+      `Missing required fields in shortest.config.ts:\n` +
+      missingFields.map(field => `  - ${field}`).join('\n')
+    );
+  }
+}
+
 export async function initialize() {
+  if (globalConfig) return globalConfig;
+
   dotenv.config({ path: join(process.cwd(), '.env') });
   dotenv.config({ path: join(process.cwd(), '.env.local') });
   
@@ -56,19 +73,39 @@ export async function initialize() {
     try {
       const module = await compiler.loadModule(file, process.cwd());
       if (module.default) {
-        config = { ...defaultConfig, ...module.default };
-        return;
+        const config = module.default;
+        validateConfig(config);
+        
+        globalConfig = {
+          ...config,
+          anthropicKey: process.env.ANTHROPIC_API_KEY || config.anthropicKey
+        };
+        
+        return globalConfig;
       }
     } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Config Error: ${error.message}`);
+      }
       continue;
     }
   }
 
-  config = defaultConfig;
+  throw new Error(
+    'No config file found. Create shortest.config.ts in your project root.\n' +
+    'Required fields:\n' +
+    '  - headless: boolean\n' +
+    '  - baseUrl: string\n' +
+    '  - testDir: string | string[]\n' +
+    '  - anthropicKey: string'
+  );
 }
 
 export function getConfig(): ShortestConfig {
-  return config;
+  if (!globalConfig) {
+    throw new Error('Config not initialized. Call initialize() first');
+  }
+  return globalConfig;
 }
 
 // New Test API Implementation

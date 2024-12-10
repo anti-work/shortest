@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2024-12-09
+
+### Fixed
+- Fixed FS build error
+- Fixed CLI --headless flag to override config file
+
+### Changed
+- Improved Config file loading
+
+⚠️ **Known Issues**
+- Using this version with React 18 in Next.js 14+ projects may cause type conflicts with Server Actions and `useFormStatus`
+- If you encounter type errors with form actions or React hooks, ensure you're using React 19
+
 ## [0.0.4] - 2024-12-06
 
 ### Added

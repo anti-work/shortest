@@ -4,6 +4,14 @@ import { TestRunner } from '../core/runner';
 import { GitHubTool } from '../browser/integrations/github';
 import pc from 'picocolors';
 
+process.removeAllListeners('warning');
+process.on('warning', (warning) => {
+  if (warning.name === 'DeprecationWarning' && warning.message.includes('punycode')) {
+    return;
+  }
+  console.warn(warning);
+});
+
 const VALID_FLAGS = ['--headless', '--github-code', '--debug-ai', '--help', '-h'];
 const VALID_PARAMS = ['--target', '--secret'];
 
@@ -67,22 +75,36 @@ async function handleGitHubCode(args: string[]) {
   }
 }
 
+function isValidArg(arg: string): boolean {
+  // Check if it's a flag
+  if (VALID_FLAGS.includes(arg)) {
+    return true;
+  }
+  
+  // Check if it's a parameter with value
+  const paramName = arg.split('=')[0];
+  if (VALID_PARAMS.includes(paramName)) {
+    return true;
+  }
+  
+  return false;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   
-  // Check for help flag first
   if (args.includes('--help') || args.includes('-h')) {
     showHelp();
     process.exit(0);
   }
   
-  // Handle GitHub code generation
   if (args.includes('--github-code')) {
     await handleGitHubCode(args);
   }
 
-  // Validate remaining flags
-  const invalidFlags = args.filter(arg => arg.startsWith('--') && !VALID_FLAGS.includes(arg));
+  const invalidFlags = args
+    .filter(arg => arg.startsWith('--'))
+    .filter(arg => !isValidArg(arg));
   
   if (invalidFlags.length > 0) {
     console.error(`Error: Invalid argument(s): ${invalidFlags.join(', ')}`);
@@ -92,19 +114,34 @@ async function main() {
   const headless = args.includes('--headless');
   const targetUrl = args.find(arg => arg.startsWith('--target='))?.split('=')[1];
   const testPattern = args.find(arg => !arg.startsWith('--'));
-  
   const debugAI = args.includes('--debug-ai');
 
-  const runner = new TestRunner(process.cwd(), true, headless, targetUrl, debugAI);
-  
   try {
+    const runner = new TestRunner(process.cwd(), true, headless, targetUrl, debugAI);
+    await runner.initialize();
+    
     if (testPattern) {
       await runner.runFile(testPattern);
     } else {
       await runner.runAll();
     }
   } catch (error) {
-    console.error('Error: Invalid argument(s)');
+    if (error instanceof Error) {
+      if (error.message.includes('Config')) {
+        console.error(pc.red('\nConfiguration Error:'));
+        console.error(pc.dim(error.message));
+        console.error(pc.dim('\nMake sure you have a valid shortest.config.ts with all required fields:'));
+        console.error(pc.dim('  - headless: boolean'));
+        console.error(pc.dim('  - baseUrl: string'));
+        console.error(pc.dim('  - testDir: string | string[]'));
+        console.error(pc.dim('  - anthropicKey: string'));
+        console.error();
+      } else {
+        console.error(pc.red('\nError:'), error.message);
+      }
+    } else {
+      console.error(pc.red('\nUnknown error occurred'));
+    }
     process.exit(1);
   }
 }

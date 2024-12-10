@@ -2,7 +2,8 @@ import { build, BuildOptions } from 'esbuild';
 import { join, resolve } from 'path';
 import { mkdirSync, existsSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { defaultConfig } from '../../types';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
 export class TestCompiler {
   private cacheDir: string;
@@ -24,8 +25,19 @@ export class TestCompiler {
       'url',
       'crypto',
       'buffer',
-      'querystring'
-    ]
+      'querystring',
+      'fsevents'
+    ],
+    banner: {
+      js: `
+        import { fileURLToPath } from 'url';
+        import { dirname } from 'path';
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+        import { createRequire } from "module";
+        const require = createRequire(import.meta.url);
+      `
+    }
   };
 
   constructor() {
@@ -67,7 +79,7 @@ export class TestCompiler {
     const absolutePath = resolve(cwd, filePath);
     
     if (!existsSync(absolutePath)) {
-      return { default: defaultConfig };
+      throw new Error(`Config file not found: ${filePath}`);
     }
 
     try {
@@ -79,10 +91,11 @@ export class TestCompiler {
       });
       
       const code = result.outputFiles[0].text;
-      return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+      const tempFile = join(this.cacheDir, 'config.mjs');
+      writeFileSync(tempFile, code);
+      return import(`file://${tempFile}`);
     } catch (error) {
-      console.warn(`Error loading config from ${absolutePath}:`, error);
-      return { default: defaultConfig };
+      throw new Error(`Failed to load config from ${absolutePath}: ${error}`);
     }
   }
 }
