@@ -226,6 +226,11 @@ export class TestRunner {
 
       } finally {
         await this.browserManager.close();
+        // reset all hooks
+        registry.beforeAllFns = [];
+        registry.afterAllFns = [];
+        registry.beforeEachFns = [];
+        registry.afterEachFns = [];
       }
 
     } catch (error) {
