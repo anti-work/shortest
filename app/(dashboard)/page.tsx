@@ -10,12 +10,12 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-4xl font-bold text-gray-900 tracking-tight sm:text-5xl md:text-6xl">
-              (Have AI) Write Your Tests
-              <span className="block text-orange-500">Faster Than Ever</span>
+              QA via natural language
+              <span className="block text-orange-500">AI tests</span>
             </h1>
             <p className="mt-3 text-base text-gray-500 sm:mt-5 sm:text-xl lg:text-lg xl:text-xl max-w-2xl mx-auto">
-              Shortest observes your pull requests, helps you write tests for
-              new features, and fixes broken tests that block you from shipping.
+              Write tests in plain English and let AI handle the execution. Built on Playwright
+              with seamless GitHub integration.
             </p>
             <div className="mt-8 flex justify-center">
               <SignedOut>
@@ -48,15 +48,11 @@ export default function HomePage() {
               </div>
               <div className="mt-5">
                 <h2 className="text-lg font-medium text-gray-900">
-                  Writes New Tests
+                  Natural Language Testing
                 </h2>
                 <p className="mt-2 text-base text-gray-500">
-                  Intelligently generates test cases for new features in your
-                  pull requests{" "}
-                  <span className="font-bold text-green-500">
-                    only once you're ready
-                  </span>
-                  .
+                  Write tests in plain English - no need to learn complex testing frameworks or APIs.
+                  <span className="font-bold text-green-500"> Simple and intuitive</span>.
                 </p>
               </div>
             </div>
@@ -67,15 +63,11 @@ export default function HomePage() {
               </div>
               <div className="mt-5">
                 <h2 className="text-lg font-medium text-gray-900">
-                  Fixes Broken Tests
+                  AI-Powered QA
                 </h2>
                 <p className="mt-2 text-base text-gray-500">
-                  Suggests fixes for broken tests to align with new
-                  functionality,{" "}
-                  <span className="font-bold text-green-500">
-                    ensuring fast merges
-                  </span>
-                  .
+                  Powered by Anthropic's Claude API to understand and execute your QA tests
+                  <span className="font-bold text-green-500"> with high reliability</span>.
                 </p>
               </div>
             </div>
@@ -86,16 +78,49 @@ export default function HomePage() {
               </div>
               <div className="mt-5">
                 <h2 className="text-lg font-medium text-gray-900">
-                  Seamless Integration
+                  Built on Playwright
                 </h2>
                 <p className="mt-2 text-base text-gray-500">
-                  Integrates with your existing GitHub workflow,{" "}
-                  <span className="font-bold text-green-500">
-                    suggesting changes as you go
-                  </span>
-                  .
+                  Leverages Playwright's robust testing engine
+                  <span className="font-bold text-green-500"> with GitHub integration</span>.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="lg:grid lg:grid-cols-2 lg:gap-8 lg:items-center">
+            <div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-4">Write tests in plain English</h3>
+              <pre className="bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto">
+                <code>{`import { shortest } from '@antiwork/shortest'
+
+shortest('Login to the app using email and password', {
+  username: process.env.GITHUB_USERNAME,
+  password: process.env.GITHUB_PASSWORD
+})`}</code>
+              </pre>
+              <h3 className="text-2xl font-semibold text-gray-900 mt-8 mb-4">Simple configuration</h3>
+              <pre className="bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto">
+                <code>{`import type { ShortestConfig } from '@antiwork/shortest';
+
+export default {
+  headless: false,
+  baseUrl: 'http://localhost:3000',
+  testDir: 'app/__tests__',
+  anthropicKey: process.env.ANTHROPIC_API_KEY
+} satisfies ShortestConfig;`}</code>
+              </pre>
+            </div>
+            <div className="mt-8 lg:mt-0">
+              <h2 className="text-3xl font-bold text-gray-900">Ready to simplify your testing?</h2>
+              <p className="mt-3 text-lg text-gray-500">
+                Write tests in natural language, powered by AI. Focus on describing your test cases
+                while Shortest handles the execution details.
+              </p>
             </div>
           </div>
         </div>
@@ -106,13 +131,11 @@ export default function HomePage() {
           <div className="lg:grid lg:grid-cols-2 lg:gap-8 lg:items-center">
             <div>
               <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
-                Ready to streamline your pull requests?
+                Ready to get started?
               </h2>
               <p className="mt-3 max-w-3xl text-lg text-gray-500">
-                Shortest observes your pull requests, helps write tests for new
-                features, and assists in fixing broken tests. Focus on writing
-                great code while Shortest ensures your tests are up to date and
-                passing.
+                Start writing natural language tests today and let AI handle the implementation.
+                Focus on describing your test scenarios while Shortest takes care of the rest.
               </p>
             </div>
             <div className="mt-8 lg:mt-0 flex justify-center lg:justify-end">

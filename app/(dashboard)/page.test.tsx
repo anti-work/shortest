@@ -31,7 +31,7 @@ describe("Homepage", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Write Your Tests"
+      "QA via natural language"
     );
   });
 });
