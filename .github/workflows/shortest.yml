@@ -1,37 +1,47 @@
 name: "Shortest Tests"
+
 on:
-  # We want to listen to Vercel deployment status events
-  deployment_status
+  pull_request:
+    branches: [main]
 
 jobs:
   shortest:
-    # Only run on Vercel deployment success
-    if: |
-      github.event.deployment_status.state == 'success' && 
-      contains(github.event.deployment_status.target_url, 'vercel.app')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.SHORTEST_ANTHROPIC_API_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
     
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install
 
-      - name: Get Vercel preview URL
-        id: vercel_url
-        run: |
-          DEPLOY_URL="${{ github.event.deployment_status.target_url }}"
-          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+      - name: Wait for Vercel preview URL
+        uses: patrickedqvist/wait-for-vercel-preview@v1.3.2
+        id: waitFor
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          max_timeout: 300
+          check_status: false # Don't check the URL status
 
       - name: Run Shortest tests
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: pnpm shortest --headless --target=${{ steps.vercel_url.outputs.url }}
+          PLAYWRIGHT_TEST_BASE_URL: ${{ steps.waitFor.outputs.url }}
+        run: pnpm exec shortest --headless --target=${{ steps.waitFor.outputs.url }}
