@@ -23,8 +23,8 @@ export const keyboardShortcuts: Record<string, string | string[]> = {
 };
 
 export const scaleRatio = {
-  x: 1543 / 1170,  // ≈ 1.318
-  y: 32 / 24       // ≈ 1.333
+  x: 1543 / 1170,
+  y: 32 / 24
 };
 
 export async function mouseMove(page: Page, x: number, y: number): Promise<void> {
@@ -36,7 +36,24 @@ export async function mouseMove(page: Page, x: number, y: number): Promise<void>
   const scaledY = Math.round(y * scaleRatio.y);
   
   await page.mouse.move(scaledX, scaledY);
-  await page.waitForTimeout(100);
+  
+  // Update visual cursor
+  await page.evaluate(({ x, y }) => {
+    const cursor = document.getElementById('ai-cursor');
+    const trail = document.getElementById('ai-cursor-trail');
+    if (cursor && trail) {
+      window.cursorPosition = { x, y };
+      cursor.style.left = `${x}px`;
+      cursor.style.top = `${y}px`;
+      
+      setTimeout(() => {
+        trail.style.left = `${x}px`;
+        trail.style.top = `${y}px`;
+      }, 50);
+    }
+  }, { x: scaledX, y: scaledY });
+  
+  await page.waitForTimeout(50);
 }
 
 export async function click(page: Page, x: number, y: number): Promise<void> {
@@ -45,7 +62,7 @@ export async function click(page: Page, x: number, y: number): Promise<void> {
   
   await mouseMove(page, x, y);
   await page.mouse.click(scaledX, scaledY);
-  await showClickAnimation(page);
+  await showClickAnimation(page, 'left');
 }
 
 export async function dragMouse(page: Page, x: number, y: number): Promise<void> {
@@ -57,20 +74,32 @@ export async function dragMouse(page: Page, x: number, y: number): Promise<void>
   await page.mouse.up();
 }
 
-export async function showClickAnimation(page: Page): Promise<void> {
-  try {
-    await page.evaluate(() => {
-      const cursor = document.getElementById('ai-cursor');
-      if (cursor) {
-        cursor.style.transform = 'translate(-50%, -50%) scale(0.8)';
-        setTimeout(() => {
-          cursor.style.transform = 'translate(-50%, -50%) scale(1)';
-        }, 100);
+export async function showClickAnimation(page: Page, type: 'left' | 'right' | 'double' = 'left'): Promise<void> {
+  await page.evaluate((clickType) => {
+    const cursor = document.getElementById('ai-cursor');
+    if (cursor) {
+      cursor.classList.add('clicking');
+      
+      switch (clickType) {
+        case 'double':
+          cursor.style.transform = 'translate(-50%, -50%) scale(0.7)';
+          cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+          break;
+        case 'right':
+          cursor.style.borderColor = 'blue';
+          break;
+        default:
+          cursor.style.transform = 'translate(-50%, -50%) scale(0.8)';
       }
-    });
-  } catch (error) {
-    // fail silently
-  }
+
+      setTimeout(() => {
+        cursor.classList.remove('clicking');
+        cursor.style.transform = 'translate(-50%, -50%) scale(1)';
+        cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+        cursor.style.borderColor = 'red';
+      }, 200);
+    }
+  }, type);
 }
 
 export async function getCursorPosition(page: Page): Promise<[number, number]> {

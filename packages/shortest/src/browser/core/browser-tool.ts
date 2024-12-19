@@ -2,6 +2,7 @@
 declare global {
   interface Window {
     cursorPosition: { x: number; y: number };
+    lastPosition: { x: number; y: number };
     showClick: () => void;
   }
 }
@@ -51,14 +52,44 @@ export class BrowserTool extends BaseBrowserTool {
   }
 
   private async initialize(): Promise<void> {
+    // Initial setup with retry
+    const initWithRetry = async () => {
+      for (let i = 0; i < 3; i++) {
+        try {
+          await this.initializeCursor();
+          break;
+        } catch (error) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+    };
+
+    await initWithRetry();
+    
+    // Re-initialize on navigation
     this.page.on('load', async () => {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      await initWithRetry();
+    });
+  }
+
+  private async initializeCursor(): Promise<void> {
+    try {
+      // Simpler check for page readiness
+      await this.page.waitForLoadState('domcontentloaded', { timeout: 1000 })
+        .catch(() => {});
+
+      // Add styles only if they don't exist
+      const hasStyles = await this.page.evaluate(() => {
+        return !!document.querySelector('style[data-shortest-cursor]');
+      }).catch(() => false);
+
+      if (!hasStyles) {
+        // Create style element directly in evaluate
         await this.page.evaluate(() => {
-          if (!document.getElementById('ai-cursor')) {
-            const cursor = document.createElement('div');
-            cursor.id = 'ai-cursor';
-            cursor.style.cssText = `
+          const style = document.createElement('style');
+          style.setAttribute('data-shortest-cursor', 'true');
+          style.textContent = `
+            #ai-cursor {
               width: 20px;
               height: 20px;
               border: 2px solid red;
@@ -66,27 +97,77 @@ export class BrowserTool extends BaseBrowserTool {
               position: fixed;
               pointer-events: none;
               z-index: 999999;
-              transition: all 0.1s ease;
+              transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
               transform: translate(-50%, -50%);
               background-color: rgba(255, 0, 0, 0.2);
-            `;
-            document.body.appendChild(cursor);
-
-            window.cursorPosition = { x: 0, y: 0 };
-            
-            document.addEventListener('mousemove', (e) => {
-              window.cursorPosition = { x: e.clientX, y: e.clientY };
-              cursor.style.left = e.clientX + 'px';
-              cursor.style.top = e.clientY + 'px';
-            });
-          }
-        }).catch(() => {
-          // Silently fail cursor initialization during navigation
+            }
+            #ai-cursor.clicking {
+              transform: translate(-50%, -50%) scale(0.8);
+              background-color: rgba(255, 0, 0, 0.4);
+            }
+            #ai-cursor-trail {
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+              position: fixed;
+              pointer-events: none;
+              z-index: 999998;
+              background-color: rgba(255, 0, 0, 0.1);
+              transition: all 0.1s linear;
+              transform: translate(-50%, -50%);
+            }
+          `;
+          document.head.appendChild(style);
         });
-      } catch (error) {
-        // Silently fail initialization during navigation
       }
-    });
+
+      // Initialize cursor elements with position persistence
+      await this.page.evaluate(() => {
+        if (!document.getElementById('ai-cursor')) {
+          const cursor = document.createElement('div');
+          cursor.id = 'ai-cursor';
+          document.body.appendChild(cursor);
+
+          const trail = document.createElement('div');
+          trail.id = 'ai-cursor-trail';
+          document.body.appendChild(trail);
+
+          // Restore or initialize position
+          window.cursorPosition = window.cursorPosition || { x: 0, y: 0 };
+          window.lastPosition = window.lastPosition || { x: 0, y: 0 };
+
+          // Set initial position
+          cursor.style.left = window.cursorPosition.x + 'px';
+          cursor.style.top = window.cursorPosition.y + 'px';
+          trail.style.left = window.cursorPosition.x + 'px';
+          trail.style.top = window.cursorPosition.y + 'px';
+
+          // Update handler
+          const updateCursor = (x: number, y: number) => {
+            window.cursorPosition = { x, y };
+            cursor.style.left = `${x}px`;
+            cursor.style.top = `${y}px`;
+            
+            requestAnimationFrame(() => {
+              trail.style.left = `${x}px`;
+              trail.style.top = `${y}px`;
+            });
+          };
+
+          document.addEventListener('mousemove', (e) => {
+            window.lastPosition = window.cursorPosition;
+            updateCursor(e.clientX, e.clientY);
+          });
+        }
+      });
+
+    } catch (error) {
+      if (error instanceof Error && 
+          !error.message.includes('context was destroyed') && 
+          !error.message.includes('Target closed')) {
+        console.warn('Cursor initialization failed:', error);
+      }
+    }
   }
 
   public async click(selector: string): Promise<void> {
@@ -495,5 +576,25 @@ export class BrowserTool extends BaseBrowserTool {
     } catch (error) {
       console.warn('Failed to cleanup screenshots:', error);
     }
+  }
+
+  async showCursor(): Promise<void> {
+    this.cursorVisible = true;
+    await this.page.evaluate(() => {
+      const cursor = document.getElementById('ai-cursor');
+      const trail = document.getElementById('ai-cursor-trail');
+      if (cursor) cursor.style.display = 'block';
+      if (trail) trail.style.display = 'block';
+    });
+  }
+
+  async hideCursor(): Promise<void> {
+    this.cursorVisible = false;
+    await this.page.evaluate(() => {
+      const cursor = document.getElementById('ai-cursor');
+      const trail = document.getElementById('ai-cursor-trail');
+      if (cursor) cursor.style.display = 'none';
+      if (trail) trail.style.display = 'none';
+    });
   }
 }
