@@ -50,6 +50,7 @@ export interface TestFunction {
   }[];
   directExecution?: boolean;
   afterFn?: (context: TestContext) => void | Promise<void>;
+  requires?: string[];
 }
 
 export type TestChain = {
@@ -58,6 +59,8 @@ export type TestChain = {
   expect(description: string, fn?: (context: TestContext) => Promise<void>): TestChain;
   expect(description: string, payload?: any, fn?: (context: TestContext) => Promise<void>): TestChain;
   after(fn: (context: TestContext) => void | Promise<void>): TestChain;
+  run(fn: (context: TestContext) => Promise<void>): TestChain;
+  requires(...testNames: string[]): TestChain;
 };
 
 export type TestAPI = {
