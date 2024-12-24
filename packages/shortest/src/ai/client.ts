@@ -10,8 +10,9 @@ export class AIClient {
   private model: string;
   private maxMessages: number;
   private debugMode: boolean;
+  public basePrompt: string;
 
-  constructor(config: AIConfig, debugMode: boolean = false) {
+  constructor(config: AIConfig, debugMode: boolean = true) {
     if (!config.apiKey) {
       throw new Error('Anthropic API key is required. Set it in shortest.config.ts or ANTHROPIC_API_KEY env var');
     }
@@ -21,7 +22,8 @@ export class AIClient {
     });
     this.model = 'claude-3-5-sonnet-20241022';
     this.maxMessages = 10;
-    this.debugMode = debugMode;
+    this.debugMode = true;
+    this.basePrompt = SYSTEM_PROMPT;
   }
 
   async processAction(
@@ -72,7 +74,7 @@ export class AIClient {
           model: this.model,
           max_tokens: 1024,
           messages,
-          system: SYSTEM_PROMPT,
+          system: this.basePrompt,
           tools: [...AITools],
           betas: ["computer-use-2024-10-22"]
         });

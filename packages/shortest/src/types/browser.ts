@@ -71,6 +71,7 @@ export interface BrowserToolConfig {
   width: number;
   height: number;
   testContext?: TestContext;
+  debug?: boolean;
 }
 
 export type BetaToolType = 

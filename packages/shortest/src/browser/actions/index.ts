@@ -75,31 +75,35 @@ export async function dragMouse(page: Page, x: number, y: number): Promise<void>
 }
 
 export async function showClickAnimation(page: Page, type: 'left' | 'right' | 'double' = 'left'): Promise<void> {
-  await page.evaluate((clickType) => {
-    const cursor = document.getElementById('ai-cursor');
-    if (cursor) {
-      cursor.classList.add('clicking');
-      
-      switch (clickType) {
-        case 'double':
-          cursor.style.transform = 'translate(-50%, -50%) scale(0.7)';
-          cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-          break;
-        case 'right':
-          cursor.style.borderColor = 'blue';
-          break;
-        default:
-          cursor.style.transform = 'translate(-50%, -50%) scale(0.8)';
-      }
+  try {
+    await page.evaluate((clickType) => {
+      const cursor = document.getElementById('ai-cursor');
+      if (cursor) {
+        cursor.classList.add('clicking');
+        
+        switch (clickType) {
+          case 'double':
+            cursor.style.transform = 'translate(-50%, -50%) scale(0.7)';
+            cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+            break;
+          case 'right':
+            cursor.style.borderColor = 'blue';
+            break;
+          default:
+            cursor.style.transform = 'translate(-50%, -50%) scale(0.8)';
+        }
 
-      setTimeout(() => {
-        cursor.classList.remove('clicking');
-        cursor.style.transform = 'translate(-50%, -50%) scale(1)';
-        cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
-        cursor.style.borderColor = 'red';
-      }, 200);
-    }
-  }, type);
+        setTimeout(() => {
+          cursor.classList.remove('clicking');
+          cursor.style.transform = 'translate(-50%, -50%) scale(1)';
+          cursor.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+          cursor.style.borderColor = 'red';
+        }, 200);
+      }
+    }, type);
+  } catch (error) {
+    console.error('Error showing click animation:', error);
+  }
 }
 
 export async function getCursorPosition(page: Page): Promise<[number, number]> {

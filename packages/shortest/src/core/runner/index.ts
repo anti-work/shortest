@@ -3,6 +3,7 @@ import { resolve } from 'path';
 import { TestCompiler } from '../compiler';
 import { BrowserManager } from '../../browser/manager';
 import { BrowserTool } from '../../browser/core/browser-tool';
+import { SnapshotBrowserTool } from '../../browser/core/snapshot-browser-tool';
 import { AIClient } from '../../ai/client';
 import { initialize, getConfig } from '../../index';
 import { TestFunction, TestContext, ShortestConfig } from '../../types';
@@ -12,6 +13,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { APIRequest, BrowserContext } from 'playwright';
 import * as playwright from 'playwright';
 import { request, chromium, APIRequestContext } from 'playwright';
+import { SnapshotAIClient } from '../../ai/snapshot-client';
 
 interface TestResult {
   result: 'pass' | 'fail';
@@ -152,7 +154,7 @@ export class TestRunner {
 
     // Use the shared context
     const testContext = await this.createTestContext(context);
-    const browserTool = new BrowserTool(testContext.page, this.browserManager, {
+    const browserTool = new SnapshotBrowserTool(testContext.page, this.browserManager, {
       width: 1920,
       height: 1080,
       testContext: {
@@ -162,12 +164,14 @@ export class TestRunner {
       }
     });
 
-    const aiClient = new AIClient({
+    const baseAiClient = new AIClient({
       apiKey: this.config.anthropicKey,
       model: 'claude-3-5-sonnet-20241022',
       maxMessages: 10,
       debug: this.debugAI
     }, this.debugAI);
+
+    const aiClient = new SnapshotAIClient(baseAiClient);
 
     // First get page state
     const initialState = await browserTool.execute({ 

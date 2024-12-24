@@ -15,7 +15,8 @@ import { join } from 'path';
 import { GitHubTool } from '../integrations/github';
 import { BrowserManager } from '../manager';
 import { TestContext, BrowserToolConfig, TestFunction } from '../../types';
-import * as actions from '../actions';
+import * as standardActions from '../actions';
+import * as debugActions from '../actions/debug';
 import pc from 'picocolors';
 import { CallbackError } from '../../types/test';
 import { AssertionCallbackError } from '../../types/test';
@@ -33,6 +34,8 @@ export class BrowserTool extends BaseBrowserTool {
   private testContext?: TestContext;
   private readonly MAX_SCREENSHOTS = 10;
   private readonly MAX_AGE_HOURS = 5;
+  private actions: typeof standardActions;
+  private debug: boolean;
 
   constructor(
     page: Page, 
@@ -46,6 +49,8 @@ export class BrowserTool extends BaseBrowserTool {
     mkdirSync(this.screenshotDir, { recursive: true });
     this.viewport = { width: config.width, height: config.height };
     this.testContext = config.testContext;
+    this.debug = config.debug || false;
+    this.actions = this.debug ? debugActions : standardActions;
     
     this.initialize();
     this.cleanupScreenshots();
@@ -175,11 +180,15 @@ export class BrowserTool extends BaseBrowserTool {
   }
 
   public async clickAtCoordinates(x: number, y: number): Promise<void> {
-    await actions.click(this.page, x, y);
+    await this.actions.click(this.page, x, y);
   }
 
   async execute(input: ActionInput): Promise<ToolResult> {
     try {
+      if (this.debug) {
+        console.log(pc.cyan(`\n🔍 Executing action: ${input.action}`), input);
+      }
+
       let output = '';
       let metadata = {};
 
@@ -189,7 +198,7 @@ export class BrowserTool extends BaseBrowserTool {
         case 'middle_click':
         case 'double_click': {
           const clickCoords = input.coordinates || this.lastMousePosition;
-          await this.clickAtCoordinates(clickCoords[0], clickCoords[1]);
+          await this.actions.click(this.page, clickCoords[0], clickCoords[1]);
           output = `${input.action} at (${clickCoords[0]}, ${clickCoords[1]})`;
           
           // Get initial metadata before potential navigation
@@ -215,7 +224,7 @@ export class BrowserTool extends BaseBrowserTool {
           if (!coords) {
             throw new ToolError('Coordinates required for mouse_move');
           }
-          await actions.mouseMove(this.page, coords[0], coords[1]);
+          await this.actions.mouseMove(this.page, coords[0], coords[1]);
           this.lastMousePosition = [coords[0], coords[1]];
           output = `Mouse moved to (${coords[0]}, ${coords[1]})`;
           break;
@@ -224,12 +233,12 @@ export class BrowserTool extends BaseBrowserTool {
           if (!input.coordinates) {
             throw new ToolError('Coordinates required for left_click_drag');
           }
-          await actions.dragMouse(this.page, input.coordinates[0], input.coordinates[1]);
+          await this.actions.dragMouse(this.page, input.coordinates[0], input.coordinates[1]);
           output = `Dragged mouse to (${input.coordinates[0]}, ${input.coordinates[1]})`;
           break;
 
         case 'cursor_position':
-          const position = await actions.getCursorPosition(this.page);
+          const position = await this.actions.getCursorPosition(this.page);
           output = `Cursor position: (${position[0]}, ${position[1]})`;
           break;
 
@@ -254,9 +263,9 @@ export class BrowserTool extends BaseBrowserTool {
           await this.page.waitForTimeout(100);
           
           const keyText = input.text.toLowerCase();
-          const keys = Array.isArray(actions.keyboardShortcuts[keyText]) ? 
-            actions.keyboardShortcuts[keyText] : 
-            [actions.keyboardShortcuts[keyText] || input.text];
+          const keys = Array.isArray(this.actions.keyboardShortcuts[keyText]) ? 
+            this.actions.keyboardShortcuts[keyText] : 
+            [this.actions.keyboardShortcuts[keyText] || input.text];
 
           if (Array.isArray(keys)) {
             for (const key of keys) {
@@ -397,6 +406,11 @@ export class BrowserTool extends BaseBrowserTool {
       try {
         await this.page.waitForTimeout(200);
         metadata = await this.getMetadata();
+        
+        if (this.debug) {
+          console.log(pc.green(`✅ Action completed: ${input.action}`));
+          console.log(pc.yellow('Metadata:'), metadata);
+        }
       } catch (metadataError) {
         console.warn('Failed to get metadata:', metadataError);
         metadata = {};
@@ -408,6 +422,9 @@ export class BrowserTool extends BaseBrowserTool {
       };
 
     } catch (error) {
+      if (this.debug) {
+        console.error(pc.red(`\n❌ Action failed: ${input.action}`), error);
+      }
       console.error(pc.red('\n❌ Browser Action Failed:'), error);
       
       if (error instanceof AssertionCallbackError) {
@@ -459,7 +476,7 @@ export class BrowserTool extends BaseBrowserTool {
 
       // Only try to get cursor position if page is stable
       if (await this.isPageStable()) {
-        const position = await actions.getCursorPosition(this.page);
+        const position = await this.actions.getCursorPosition(this.page);
         metadata.cursor_info = {
           position,
           visible: this.cursorVisible
