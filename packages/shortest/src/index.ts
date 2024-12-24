@@ -131,11 +131,16 @@ function createTestChain(
       },
       after: () => {
         throw new Error('after() cannot be called on direct execution test');
+      },
+      run: () => {
+        throw new Error('run() cannot be called on direct execution test');
+      },
+      requires: () => {
+        throw new Error('requires() cannot be called on direct execution test');
       }
     };
   }
 
-  // Rest of existing createTestChain implementation...
   const test: TestFunction = {
     name: nameOrFn,
     payload: typeof payloadOrFn === 'function' ? undefined : payloadOrFn,
@@ -173,6 +178,14 @@ function createTestChain(
     },
     after(fn: (context: TestContext) => void | Promise<void>) {
       test.afterFn = (context) => Promise.resolve(fn(context));
+      return chain;
+    },
+    run(fn: (context: TestContext) => Promise<void>) {
+      test.fn = fn;
+      return chain;
+    },
+    requires(...testNames: string[]) {
+      test.requires = testNames;
       return chain;
     }
   };

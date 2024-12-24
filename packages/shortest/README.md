@@ -7,6 +7,7 @@ AI-powered natural language end-to-end testing framework.
 - AI-powered test execution using Claude computer use API
 - Built on Playwright
 - GitHub integration with 2FA support
+- Test dependencies and chaining support
 
 ## Installation
 ```bash
@@ -77,6 +78,39 @@ shortest('Login to the app using username and password', {
   expect(user).toBeDefined();
 });
 ```
+
+## Test Dependencies
+You can chain tests to depend on other tests. The dependent tests will only run after their required tests have completed successfully:
+
+```typescript
+import { shortest } from '@antiwork/shortest';
+
+shortest('Login to the application', { 
+  email: 'test@shortest.com', 
+  password: 'password' 
+})
+.expect('User should be logged in successfully');
+
+shortest('Create a new post', { 
+  title: 'Test Post', 
+  content: 'This is a test' 
+})
+.requires('Login to the application')  // This test will run after login
+.expect('Post should be created successfully');
+
+shortest('Add a comment', { 
+  comment: 'Great post!' 
+})
+.requires('Create a new post')  // This test depends on post creation
+.expect('Comment should be added to the post');
+```
+
+The test runner will:
+- Execute tests in dependency order
+- Run dependencies only once
+- Maintain state between dependent tests
+- Detect circular dependencies
+- Handle missing dependencies
 
 ## Lifecycle hooks
 You can use lifecycle hooks to run code before and after the test.

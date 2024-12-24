@@ -29,6 +29,7 @@ export class TestRunner {
   private logger: Logger;
   private debugAI: boolean;
   private testContext: TestContext | null = null;
+  private completedTests = new Set<string>();
 
   constructor(
     cwd: string, 
@@ -234,12 +235,35 @@ export class TestRunner {
     return aiResult;
   }
 
+  private async executeTestWithDependencies(test: TestFunction, context: BrowserContext) {
+    if (test.requires?.length) {
+      for (const requiredTest of test.requires) {
+        if (!this.completedTests.has(requiredTest)) {
+          const registry = (global as any).__shortest__.registry;
+          const dependency = registry.tests.get(requiredTest)?.[0];
+          
+          if (!dependency) {
+            throw new Error(`Required test "${requiredTest}" not found for "${test.name}"`);
+          }
+
+          await this.executeTestWithDependencies(dependency, context);
+        }
+      }
+    }
+
+    const result = await this.executeTest(test, context);
+    if (test.name) {
+      this.completedTests.add(test.name);
+    }
+    return result;
+  }
+
   private async executeTestFile(file: string) {
     try {
       const registry = (global as any).__shortest__.registry;
-
       registry.tests.clear();
       registry.currentFileTests = [];
+      this.completedTests.clear();  // Reset completed tests for each file
       
       this.logger.startFile(file);
       const compiledPath = await this.compiler.compileFile(file);
@@ -261,7 +285,7 @@ export class TestRunner {
             await hook(testContext);
           }
 
-          const result = await this.executeTest(test, context);
+          const result = await this.executeTestWithDependencies(test, context);
           this.logger.reportTest(
             test.name, 
             result.result === 'pass' ? 'passed' : 'failed',
