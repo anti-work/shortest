@@ -389,6 +389,26 @@ export class BrowserTool extends BaseBrowserTool {
           }
         }
 
+        case 'sleep_milliseconds': {
+          const defaultDuration = 1000;
+          const maxDuration = 60000;
+          let duration = input.duration ?? defaultDuration;
+          
+          // Enforce maximum duration
+          if (duration > maxDuration) {
+            console.warn(`Requested sleep duration ${duration}ms exceeds maximum of ${maxDuration}ms. Using maximum.`);
+            duration = maxDuration;
+          }
+
+          // Convert to seconds for logging
+          const seconds = Math.round(duration / 1000);
+          console.log(`⏳ Waiting for ${seconds} second${seconds !== 1 ? 's' : ''}...`);
+          
+          await this.page.waitForTimeout(duration);
+          output = `Finished waiting for ${seconds} second${seconds !== 1 ? 's' : ''}`;
+          break;
+        }
+
         default:
           throw new ToolError(`Unknown action: ${input.action}`);
       }

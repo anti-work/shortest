@@ -24,7 +24,8 @@ export type BrowserAction =
   | "type"
   | "key"
   | "run_callback"
-  | "navigate";
+  | "navigate"
+  | "sleep_milliseconds";
 
 export interface BrowserToolOptions {
   width: number;
@@ -40,6 +41,7 @@ export interface ActionInput {
   username?: string;
   password?: string;
   url?: string;
+  duration?: number;
 }
 
 export interface ToolResult {

@@ -1,6 +1,6 @@
 {
   "name": "@antiwork/shortest",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-powered natural language end-to-end testing framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,7 @@
     "build": "rm -rf dist && pnpm build:types && pnpm build:js && pnpm build:cli",
     "prepare": "pnpm build",
     "prepublishOnly": "pnpm build",
-    "postinstall": "node -e \"try { require('./dist/cli/setup.js') } catch (e) { process.exit(0) }\" && (chmod +x ./dist/cli/bin.js || true)",
+    "postinstall": "node -e \"try { if (require('fs').existsSync('./dist/cli/setup.js')) require('./dist/cli/setup.js') } catch (e) {} \" && (chmod +x dist/cli/bin.js || true)",
     "build:types": "tsc --emitDeclarationOnly --outDir dist/types && cp index.d.ts dist/",
     "build:js": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:esbuild --external:punycode --external:playwright --external:@anthropic-ai/sdk --external:expect --external:dotenv",
     "build:cjs": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --external:esbuild --external:punycode --external:playwright --external:@anthropic-ai/sdk --external:expect --external:dotenv",

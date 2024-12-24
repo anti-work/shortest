@@ -11,11 +11,16 @@ AI-powered natural language end-to-end testing framework.
 
 ## Installation
 ```bash
-npm install @antiwork/shortest
+npm install -D @antiwork/shortest
 # or
-pnpm add @antiwork/shortest
+pnpm add -D @antiwork/shortest
 # or
-yarn add @antiwork/shortest
+yarn add -D @antiwork/shortest
+```
+
+Add `.shortest/` to your `.gitignore`:
+```bash
+echo ".shortest/" >> .gitignore
 ```
 
 ### If you installed shortest without `-g` flag, you can run tests as follows:

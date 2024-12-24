@@ -1,6 +1,9 @@
 import { chromium, Browser, BrowserContext } from 'playwright';
 import { ShortestConfig } from '../../types/config';
 import { URL } from 'url';
+import { execSync } from 'child_process';
+import { platform } from 'os';
+import pc from 'picocolors';
 
 export class BrowserManager {
   private browser: Browser | null = null;
@@ -21,9 +24,28 @@ export class BrowserManager {
   }
 
   async launch(): Promise<BrowserContext> {
-    this.browser = await chromium.launch({
-      headless: this.config.headless ?? false
-    });
+    try {
+      this.browser = await chromium.launch({
+        headless: this.config.headless ?? false
+      });
+    } catch (error) {
+      // Check if error is about missing browser
+      if (error instanceof Error && error.message.includes("Executable doesn't exist")) {
+        console.log(pc.yellow('Installing Playwright browser...'));
+        const isWindows = platform() === 'win32';
+        const installCmd = isWindows ? 'npx.cmd playwright install chromium' : 'npx playwright install chromium';
+        execSync(installCmd, { stdio: 'inherit' });
+        console.log(pc.green('✓ Playwright browser installed'));
+        
+        // Try launching again
+        this.browser = await chromium.launch({
+          headless: this.config.headless ?? false
+        });
+      } else {
+        // If it's some other error, rethrow
+        throw error;
+      }
+    }
 
     this.context = await this.browser.newContext({
       viewport: { width: 1920, height: 1080 }

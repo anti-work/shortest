@@ -32,8 +32,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install
+      - name: Install Playwright
+        run: pnpm exec playwright install chromium
 
       - name: Wait for Vercel preview deployment
         uses: patrickedqvist/wait-for-vercel-preview@v1.3.2

@@ -30,6 +30,57 @@ export const AITools = [
     }
   },
   {
+    name: "generate_email",
+    description: "Generate temporary email address for testing",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["generate_email"],
+          description: "Generate a temporary email address"
+        }
+      },
+      required: ["action"]
+    }
+  },
+  {
+    name: "render_email",
+    description: "Fetch, decode and render received email in browser",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["render_email"],
+          description: "Render the received email in a new tab"
+        }
+      },
+      required: ["action"]
+    }
+  },
+  {
+    name: "sleep_milliseconds",
+    description: "Pause test execution for specified duration",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["sleep_milliseconds"],
+          description: "The action to perform"
+        },
+        duration: {
+          type: "number",
+          description: "Duration to sleep in milliseconds (e.g. 5000 for 5 seconds)",
+          minimum: 0,
+          maximum: 60000
+        }
+      },
+      required: ["action", "duration"]
+    }
+  },
+  {
     name: "run_callback",
     description: "Run callback function for current test step",
     input_schema: {
