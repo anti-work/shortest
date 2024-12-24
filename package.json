@@ -45,6 +45,7 @@
     "ai": "^3.4.0",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^2.4.3",
+    "bright": "^0.8.5",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "1.0.0",
