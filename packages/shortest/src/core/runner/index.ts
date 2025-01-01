@@ -8,6 +8,7 @@ import { request, APIRequestContext } from "playwright";
 import { AIClient } from "../../ai/client";
 import { BrowserTool } from "../../browser/core/browser-tool";
 import { BrowserManager } from "../../browser/manager";
+import { MobileManager } from "../../mobile/manager";
 import { BaseCache } from "../../cache/cache";
 import { initialize, getConfig } from "../../index";
 import {
@@ -15,11 +16,13 @@ import {
   TestContext,
   ShortestConfig,
   BrowserActionEnum,
+  MobileRunnerConfig,
 } from "../../types";
 import { CacheEntry } from "../../types/cache";
 import { hashData } from "../../utils/crypto";
 import { Logger } from "../../utils/logger";
 import { TestCompiler } from "../compiler";
+import { MobileDriver } from "../../mobile/core";
 
 interface TestResult {
   result: "pass" | "fail";
@@ -34,13 +37,16 @@ export class TestRunner {
   private targetUrl: string | undefined;
   private compiler: TestCompiler;
   private browserManager!: BrowserManager;
+  private mobileManager: MobileManager | null = null;
   private logger: Logger;
   private debugAI: boolean;
   private noCache: boolean;
   private testContext: TestContext | null = null;
   private cache: BaseCache<CacheEntry>;
+  private driver: MobileDriver | null = null;
 
   constructor(
+    config: MobileRunnerConfig,
     cwd: string,
     exitOnSuccess = true,
     forceHeadless = false,
@@ -57,6 +63,10 @@ export class TestRunner {
     this.compiler = new TestCompiler();
     this.logger = new Logger();
     this.cache = new BaseCache();
+
+    if (config.platform === 'ios' || config.platform === 'android') {
+      this.mobileManager = new MobileManager(config);
+    }
   }
 
   async initialize() {
@@ -64,22 +74,25 @@ export class TestRunner {
     await initialize();
     this.config = getConfig();
 
-    // Override with CLI options
-    if (this.forceHeadless) {
-      this.config = {
-        ...this.config,
-        headless: true,
-      };
+    if (this.mobileManager) {
+      this.driver = await this.mobileManager.launch();
+    } else {
+       // Override with CLI options
+      if (this.forceHeadless) {
+        this.config = {
+          ...this.config,
+          headless: true,
+        };
+      }
+  
+      if (this.targetUrl) {
+        this.config = {
+          ...this.config,
+          baseUrl: this.targetUrl,
+        };
+      }
+      this.browserManager = new BrowserManager(this.config);
     }
-
-    if (this.targetUrl) {
-      this.config = {
-        ...this.config,
-        baseUrl: this.targetUrl,
-      };
-    }
-
-    this.browserManager = new BrowserManager(this.config);
   }
 
   private async findTestFiles(pattern?: string): Promise<string[]> {
@@ -159,171 +172,191 @@ export class TestRunner {
 
   private async executeTest(
     test: TestFunction,
-    context: BrowserContext,
+    context: BrowserContext | null,
     config: { noCache: boolean } = { noCache: false },
   ) {
-    // If it's direct execution, skip AI
-    if (test.directExecution) {
+    if (this.driver) {
+      // Mobile test execution
       try {
-        const testContext = await this.createTestContext(context);
-        await test.fn?.(testContext);
+        const testContext = {
+          driver: this.driver,
+          platform: this.config.platform as 'ios' | 'android'
+        }
+        await test.fn?.(testContext)
         return {
           result: "pass" as const,
-          reason: "Direct execution successful",
-        };
+          reason: "Mobile test execution successful"
+        }
       } catch (error) {
         return {
           result: "fail" as const,
-          reason:
-            error instanceof Error ? error.message : "Direct execution failed",
-        };
-      }
-    }
-
-    // Use the shared context
-    const testContext = await this.createTestContext(context);
-    const browserTool = new BrowserTool(testContext.page, this.browserManager, {
-      width: 1920,
-      height: 1080,
-      testContext: {
-        ...testContext,
-        currentTest: test,
-        currentStepIndex: 0,
-      },
-    });
-
-    const aiClient = new AIClient(
-      {
-        apiKey: this.config.anthropicKey,
-        model: "claude-3-5-sonnet-20241022",
-        maxMessages: 10,
-        debug: this.debugAI,
-      },
-      this.debugAI,
-    );
-
-    // First get page state
-    const initialState = await browserTool.execute({
-      action: "screenshot",
-    });
-
-    // Build prompt with initial state and screenshot
-    const prompt = [
-      `Test: "${test.name}"`,
-      test.payload ? `Context: ${JSON.stringify(test.payload)}` : "",
-      `Callback function: ${test.fn ? " [HAS_CALLBACK]" : " [NO_CALLBACK]"}`,
-
-      // Add expectations if they exist
-      ...(test.expectations?.length
-        ? [
-            "\nExpect:",
-            ...test.expectations.map(
-              (exp, i) =>
-                `${i + 1}. ${exp.description}${
-                  exp.fn ? " [HAS_CALLBACK]" : "[NO_CALLBACK]"
-                }`,
-            ),
-          ]
-        : []),
-
-      "\nCurrent Page State:",
-      `URL: ${initialState.metadata?.window_info?.url || "unknown"}`,
-      `Title: ${initialState.metadata?.window_info?.title || "unknown"}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    // check if CLI option is not specified
-    if (!this.noCache && !config.noCache) {
-      // if test hasn't changed and is already in cache, replay steps from cache
-      if (await this.cache.get(test)) {
-        try {
-          const result = await this.runCachedTest(test, browserTool);
-
-          if (test.afterFn) {
-            try {
-              await test.afterFn(testContext);
-            } catch (error) {
-              return {
-                result: "fail" as const,
-                reason:
-                  result?.result === "fail"
-                    ? `AI: ${result.reason}, After: ${
-                        error instanceof Error ? error.message : String(error)
-                      }`
-                    : error instanceof Error
-                      ? error.message
-                      : String(error),
-              };
-            }
-          }
-          return result;
-        } catch {
-          // delete stale cached test entry
-          await this.cache.delete(test);
-          // reset window state
-          const page = browserTool.getPage();
-          await page.goto(initialState.metadata?.window_info?.url!);
-          await this.executeTest(test, context, {
-            noCache: true,
-          });
+          reason: error instanceof Error ? error.message : "Mobile test execution failed"
         }
       }
-    }
-
-    // Execute test with enhanced prompt
-    const result = await aiClient.processAction(prompt, browserTool);
-
-    if (!result) {
-      throw new Error("AI processing failed: no result returned");
-    }
-
-    // Parse AI result first
-    const finalMessage = result.finalResponse.content.find(
-      (block) =>
-        block.type === "text" &&
-        (block as Anthropic.Beta.Messages.BetaTextBlock).text.includes(
-          '"result":',
-        ),
-    );
-
-    if (!finalMessage || finalMessage.type !== "text") {
-      throw new Error("No test result found in AI response");
-    }
-
-    const jsonMatch = (
-      finalMessage as Anthropic.Beta.Messages.BetaTextBlock
-    ).text.match(/{[\s\S]*}/);
-    if (!jsonMatch) {
-      throw new Error("Invalid test result format");
-    }
-
-    const aiResult = JSON.parse(jsonMatch[0]) as TestResult;
-
-    // Execute after function if present
-    if (test.afterFn) {
-      try {
-        await test.afterFn(testContext);
-      } catch (error) {
-        return {
-          result: "fail" as const,
-          reason:
-            aiResult.result === "fail"
-              ? `AI: ${aiResult.reason}, After: ${
-                  error instanceof Error ? error.message : String(error)
-                }`
-              : error instanceof Error
-                ? error.message
-                : String(error),
-        };
+    } else if (context) {
+      // If it's direct execution, skip AI
+      if (test.directExecution) {
+        try {
+          const testContext = await this.createTestContext(context);
+          await test.fn?.(testContext);
+          return {
+            result: "pass" as const,
+            reason: "Direct execution successful",
+          };
+        } catch (error) {
+          return {
+            result: "fail" as const,
+            reason:
+              error instanceof Error ? error.message : "Direct execution failed",
+          };
+        }
       }
-    }
 
-    if (aiResult.result === "pass") {
-      // batch set new chache if test is successful
-      await this.cache.set(test, result.pendingCache);
+      // Use the shared context
+      const testContext = await this.createTestContext(context);
+      const browserTool = new BrowserTool(testContext.page, this.browserManager, {
+        width: 1920,
+        height: 1080,
+        testContext: {
+          ...testContext,
+          currentTest: test,
+          currentStepIndex: 0,
+        },
+      });
+
+      const aiClient = new AIClient(
+        {
+          apiKey: this.config.anthropicKey,
+          model: "claude-3-5-sonnet-20241022",
+          maxMessages: 10,
+          debug: this.debugAI,
+        },
+        this.debugAI,
+      );
+
+      // First get page state
+      const initialState = await browserTool.execute({
+        action: "screenshot",
+      });
+
+      // Build prompt with initial state and screenshot
+      const prompt = [
+        `Test: "${test.name}"`,
+        test.payload ? `Context: ${JSON.stringify(test.payload)}` : "",
+        `Callback function: ${test.fn ? " [HAS_CALLBACK]" : " [NO_CALLBACK]"}`,
+
+        // Add expectations if they exist
+        ...(test.expectations?.length
+          ? [
+              "\nExpect:",
+              ...test.expectations.map(
+                (exp, i) =>
+                  `${i + 1}. ${exp.description}${
+                    exp.fn ? " [HAS_CALLBACK]" : "[NO_CALLBACK]"
+                  }`,
+              ),
+            ]
+          : []),
+
+        "\nCurrent Page State:",
+        `URL: ${initialState.metadata?.window_info?.url || "unknown"}`,
+        `Title: ${initialState.metadata?.window_info?.title || "unknown"}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      // check if CLI option is not specified
+      if (!this.noCache && !config.noCache) {
+        // if test hasn't changed and is already in cache, replay steps from cache
+        if (await this.cache.get(test)) {
+          try {
+            const result = await this.runCachedTest(test, browserTool);
+
+            if (test.afterFn) {
+              try {
+                await test.afterFn(testContext);
+              } catch (error) {
+                return {
+                  result: "fail" as const,
+                  reason:
+                    result?.result === "fail"
+                      ? `AI: ${result.reason}, After: ${
+                          error instanceof Error ? error.message : String(error)
+                        }`
+                      : error instanceof Error
+                        ? error.message
+                        : String(error),
+                };
+              }
+            }
+            return result;
+          } catch {
+            // delete stale cached test entry
+            await this.cache.delete(test);
+            // reset window state
+            const page = browserTool.getPage();
+            await page.goto(initialState.metadata?.window_info?.url!);
+            await this.executeTest(test, context, {
+              noCache: true,
+            });
+          }
+        }
+      }
+
+      // Execute test with enhanced prompt
+      const result = await aiClient.processAction(prompt, browserTool);
+
+      if (!result) {
+        throw new Error("AI processing failed: no result returned");
+      }
+
+      // Parse AI result first
+      const finalMessage = result.finalResponse.content.find(
+        (block) =>
+          block.type === "text" &&
+          (block as Anthropic.Beta.Messages.BetaTextBlock).text.includes(
+            '"result":',
+          ),
+      );
+
+      if (!finalMessage || finalMessage.type !== "text") {
+        throw new Error("No test result found in AI response");
+      }
+
+      const jsonMatch = (
+        finalMessage as Anthropic.Beta.Messages.BetaTextBlock
+      ).text.match(/{[\s\S]*}/);
+      if (!jsonMatch) {
+        throw new Error("Invalid test result format");
+      }
+
+      const aiResult = JSON.parse(jsonMatch[0]) as TestResult;
+
+      // Execute after function if present
+      if (test.afterFn) {
+        try {
+          await test.afterFn(testContext);
+        } catch (error) {
+          return {
+            result: "fail" as const,
+            reason:
+              aiResult.result === "fail"
+                ? `AI: ${aiResult.reason}, After: ${
+                    error instanceof Error ? error.message : String(error)
+                  }`
+                : error instanceof Error
+                  ? error.message
+                  : String(error),
+          };
+        }
+      }
+
+      if (aiResult.result === "pass") {
+        // batch set new chache if test is successful
+        await this.cache.set(test, result.pendingCache);
+      }
+      return aiResult;
     }
-    return aiResult;
   }
 
   private async executeTestFile(file: string) {
@@ -483,5 +516,13 @@ export class TestRunner {
       result: "pass",
       reason: "All actions successfully replayed from cache",
     };
+  }
+
+  async cleanup() {
+    if (this.mobileManager) {
+      await this.mobileManager.quit();
+    } else if (this.browserManager) {
+      await this.browserManager.close();
+    }
   }
 }

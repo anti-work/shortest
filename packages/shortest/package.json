@@ -57,6 +57,7 @@
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "0.32.0",
+    "webdriverio": "^9.5.0",
     "mailosaur": "^8.7.0",
     "dotenv": "^16.4.5",
     "esbuild": "^0.20.1",

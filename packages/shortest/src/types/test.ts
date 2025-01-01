@@ -1,5 +1,6 @@
 import type { Page, Browser, APIRequest, APIRequestContext } from "playwright";
 import type * as playwright from "playwright";
+import { MobileDriver } from "../mobile/core";
 
 export interface AssertionError extends Error {
   matcherResult?: {
@@ -29,15 +30,17 @@ export class AssertionCallbackError extends CallbackError {
 }
 
 export type TestContext = {
-  page: Page;
-  browser: Browser;
-  playwright: typeof playwright & {
+  page?: Page;
+  browser?: Browser;
+  playwright?: typeof playwright & {
     request: APIRequest & {
       newContext: (options?: {
         extraHTTPHeaders?: Record<string, string>;
       }) => Promise<APIRequestContext>;
     };
   };
+  driver?: MobileDriver;
+  platform?: 'ios' | 'android';
   currentTest?: TestFunction;
   currentStepIndex?: number;
 };
