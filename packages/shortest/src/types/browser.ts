@@ -28,6 +28,7 @@ export enum BrowserActionEnum {
   Key = "key",
   RunCallback = "run_callback",
   Navigate = "navigate",
+  UpoadFile = "upload_file",
   Sleep = "sleep",
   CheckMail = "check_email",
 }
@@ -50,6 +51,7 @@ export interface ActionInput {
   url?: string;
   duration?: number;
   email?: string;
+  filepath?: string;
 }
 
 export interface ToolResult {

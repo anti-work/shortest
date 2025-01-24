@@ -392,6 +392,12 @@ export class BrowserTool extends BaseBrowserTool {
             );
           }
         }
+        case "upload_file":
+          if (!input.filepath) {
+            throw new ToolError("file path required for navigation");
+          }
+          this.page.setInputFiles('input[type="file"]', input.filepath)
+          break;
 
         case "navigate": {
           if (!input.url) {

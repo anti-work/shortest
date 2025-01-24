@@ -106,6 +106,25 @@ export const AITools = [
     type: "bash_20241022",
     name: "bash",
   },
+  {
+    name: "upload_file",
+    description: "Set the upload file to the file specified",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["upload_file"],
+          description: "The action to perform"
+        },
+        filepath: {
+          type: "string",
+          description: "The local file to upload"
+        }
+      },
+      required: ["action", "filepath"]
+    }
+  }
 ] as const;
 
 export type AITool = (typeof AITools)[number]["name"];
