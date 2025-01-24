@@ -1,3 +1,4 @@
+import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
 import Anthropic from "@anthropic-ai/sdk";
 import pc from "picocolors";
 import { BashTool } from "../browser/core/bash-tool";
@@ -9,22 +10,36 @@ import { SYSTEM_PROMPT } from "./prompts";
 import { AITools } from "./tools";
 
 export class AIClient {
-  private client: Anthropic;
+  private client: Anthropic | AnthropicBedrock;
   private model: string;
   private maxMessages: number;
   private debugMode: boolean;
 
   constructor(config: AIConfig, debugMode: boolean = false) {
-    if (!config.apiKey) {
-      throw new Error(
-        "Anthropic API key is required. Set it in shortest.config.ts or ANTHROPIC_API_KEY env var",
-      );
+    if (config.useBedrock) {
+      if (!config.awsAccessKey || !config.awsSecretKey || !config.awsRegion) {
+        throw new Error(
+          "AWS credentials required when using Bedrock. Set awsAccessKey, awsSecretKey and awsRegion in shortest.config.ts",
+        );
+      }
+      this.client = new AnthropicBedrock({
+        awsAccessKey: config.awsAccessKey,
+        awsSecretKey: config.awsSecretKey,
+        awsRegion: config.awsRegion,
+      });
+      this.model = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+    } else {
+      if (!config.apiKey) {
+        throw new Error(
+          "Anthropic API key is required. Set it in shortest.config.ts or ANTHROPIC_API_KEY env var",
+        );
+      }
+      this.client = new Anthropic({
+        apiKey: config.apiKey,
+      });
+      this.model = "claude-3-5-sonnet-20241022";
     }
 
-    this.client = new Anthropic({
-      apiKey: config.apiKey,
-    });
-    this.model = "claude-3-5-sonnet-20241022";
     this.maxMessages = 10;
     this.debugMode = debugMode;
   }

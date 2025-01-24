@@ -51,8 +51,18 @@ function validateConfig(config: Partial<ShortestConfig>) {
   if (config.headless === undefined) missingFields.push("headless");
   if (!config.baseUrl) missingFields.push("baseUrl");
   if (!config.testPattern) missingFields.push("testPattern");
-  if (!config.anthropicKey && !process.env.ANTHROPIC_API_KEY)
-    missingFields.push("anthropicKey");
+
+  if (config.useBedrock) {
+    if (!config.awsAccessKey && !process.env.AWS_ACCESS_KEY_ID)
+      missingFields.push("awsAccessKey");
+    if (!config.awsSecretKey && !process.env.AWS_SECRET_ACCESS_KEY)
+      missingFields.push("awsSecretKey");
+    if (!config.awsRegion && !process.env.AWS_REGION)
+      missingFields.push("awsRegion");
+  } else {
+    if (!config.anthropicKey && !process.env.ANTHROPIC_API_KEY)
+      missingFields.push("anthropicKey");
+  }
 
   if (missingFields.length > 0) {
     throw new Error(
