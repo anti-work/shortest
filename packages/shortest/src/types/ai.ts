@@ -1,10 +1,14 @@
 import { ActionInput } from "./browser";
 
 export interface AIConfig {
-  apiKey: string;
+  apiKey?: string;
   model?: string;
   maxMessages?: number;
   debug?: boolean;
+  useBedrock?: boolean;
+  awsAccessKey?: string;
+  awsSecretKey?: string;
+  awsRegion?: string;
 }
 
 export interface AIResponse {

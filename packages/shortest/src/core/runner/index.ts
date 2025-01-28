@@ -180,7 +180,19 @@ export class TestRunner {
     });
 
     // this may never happen as the config is initialized before this code is executed
-    if (!this.config.anthropicKey) {
+    if (this.config.useBedrock) {
+      if (
+        !this.config.awsAccessKey ||
+        !this.config.awsSecretKey ||
+        !this.config.awsRegion
+      ) {
+        return {
+          result: "fail" as const,
+          reason: "AWS credentials required when using Bedrock",
+          tokenUsage: { input: 0, output: 0 },
+        };
+      }
+    } else if (!this.config.anthropicKey) {
       return {
         result: "fail" as const,
         reason: "ANTHROPIC_KEY is not set",
@@ -191,9 +203,15 @@ export class TestRunner {
     const aiClient = new AIClient(
       {
         apiKey: this.config.anthropicKey,
-        model: "claude-3-5-sonnet-20241022",
+        awsAccessKey: this.config.awsAccessKey,
+        awsSecretKey: this.config.awsSecretKey,
+        awsRegion: this.config.awsRegion,
+        model: this.config.useBedrock
+          ? "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+          : "claude-3-5-sonnet-20241022",
         maxMessages: 10,
         debug: this.debugAI,
+        useBedrock: this.config.useBedrock,
       },
       this.debugAI,
     );
