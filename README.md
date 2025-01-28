@@ -24,6 +24,27 @@ If helpful, [here's a short video](https://github.com/anti-work/shortest/issues/
 
 ### Installation
 
+#### Using `shortest init`
+
+You can use the `shortest init` command to streamline the setup process in a new or existing project.
+
+The `shortest init` command will:
+
+- Automatically install the `@antiwork/shortest` package as a dev dependency if it is not already installed.
+- Create a default `shortest.config.ts` file with boilerplate configuration.
+- Add `.shortest/` to `.gitignore`.
+- Generate a `.env.local` file with placeholders for required environment variables such as `ANTHROPIC_API_KEY`.
+
+To use the `shortest init` command, run:
+
+```sh
+npx @antiwork/shortest init
+```
+
+#### Manual Installation
+
+If you prefer to set up Shortest manually, follow these steps:
+
 ```bash
 npm install -D @antiwork/shortest
 # or

@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+import { execSync } from "child_process";
+import { appendFileSync, existsSync, writeFileSync } from "fs";
+import { join } from "path";
+import { detect, resolveCommand } from "package-manager-detector";
 import pc from "picocolors";
 import { getConfig } from "..";
 import { GitHubTool } from "../browser/integrations/github";
@@ -108,8 +112,119 @@ function isValidArg(arg: string): boolean {
   return false;
 }
 
+export function detectProjectType(): "typescript" | "javascript" {
+  return existsSync("tsconfig.json") ? "typescript" : "javascript";
+}
+
+export function getConfigTemplate(
+  projectType: "typescript" | "javascript",
+): string {
+  if (projectType === "typescript") {
+    return `import type { ShortestConfig } from "@antiwork/shortest";
+
+export default {
+  headless: false,
+  baseUrl: "http://localhost:3000",
+  testPattern: "**/*.test.ts",
+  anthropicKey: process.env.ANTHROPIC_API_KEY,
+} satisfies ShortestConfig;
+`;
+  } else {
+    return `/** @type {import('@antiwork/shortest').ShortestConfig} */
+module.exports = {
+  headless: false,
+  baseUrl: "http://localhost:3000",
+  testPattern: "**/*.test.js",
+  anthropicKey: process.env.ANTHROPIC_API_KEY,
+};
+`;
+  }
+}
+
+export function getEnvTemplate(): string {
+  return `# Shortest Environment Variables
+ANTHROPIC_API_KEY=
+
+# Optional Configuration
+# MAILOSAUR_API_KEY=
+# MAILOSAUR_SERVER_ID=
+`;
+}
+
+export const getShortestInstallationCommand = async () => {
+  const packageManager = await detect();
+
+  if (!packageManager) {
+    throw new Error("No package manager detected");
+  }
+
+  const command = resolveCommand(packageManager.agent, "install", [
+    "@antiwork/shortest",
+    "--save-dev",
+  ]);
+
+  if (!command) {
+    throw new Error("Failed to resolve installation command");
+  }
+
+  return `${command.command} ${command.args.join(" ")}`;
+};
+
+async function initCommand() {
+  console.log(pc.blue("Setting up Shortest..."));
+
+  const projectType = detectProjectType();
+  try {
+    if (
+      !existsSync(join(process.cwd(), "node_modules", "@antiwork/shortest"))
+    ) {
+      console.log("Installing @antiwork/shortest...");
+      const installCmd = await getShortestInstallationCommand();
+
+      execSync(installCmd, { stdio: "inherit" });
+      console.log(pc.green("✔ Dependencies installed"));
+    }
+
+    const configPath = join(process.cwd(), "shortest.config.ts");
+    writeFileSync(configPath, getConfigTemplate(projectType));
+    console.log(pc.green("✔ Configuration file created"));
+
+    const gitignorePath = join(process.cwd(), ".gitignore");
+
+    if (!existsSync(gitignorePath)) {
+      writeFileSync(gitignorePath, ".shortest/\n");
+      console.log(pc.green("✔ .gitignore file created"));
+    } else {
+      appendFileSync(gitignorePath, "\n.shortest/\n");
+      console.log(pc.green("✔ .gitignore file updated"));
+    }
+
+    const envPath = join(process.cwd(), ".env.local");
+    if (!existsSync(envPath)) {
+      writeFileSync(envPath, getEnvTemplate());
+      console.log(pc.green("✔ Environment file created"));
+    } else {
+      appendFileSync(envPath, getEnvTemplate());
+      console.log(pc.green("✔ Environment file updated"));
+    }
+
+    console.log(pc.green("\nInitialization complete! Next steps:"));
+    console.log("1. Add your ANTHROPIC_API_KEY to .env.local");
+    console.log("2. Create your first test file: my-test.test.ts");
+    console.log("3. Run tests with: shortest my-test.test.ts");
+  } catch (error) {
+    console.error(pc.red("Initialization failed:"), error);
+    process.exit(1);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
+
+  if (args[0] === "init") {
+    await initCommand();
+    process.exit(0);
+  }
 
   if (args.includes("--help") || args.includes("-h")) {
     showHelp();
