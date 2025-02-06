@@ -5,7 +5,7 @@ import { BrowserTool } from "../browser/core/browser-tool";
 import { CONFIG_FILENAME } from "../constants";
 import { ToolResult } from "../types";
 import { AIConfig, RequestBash, RequestComputer } from "../types/ai";
-import { CacheAction, CacheStep } from "../types/cache";
+import { CacheAction, PendingCache } from "../types/cache";
 import { SYSTEM_PROMPT } from "./prompts";
 import { AITools } from "./tools";
 
@@ -42,6 +42,9 @@ export class AIClient {
     tokenUsage: { input: number; output: number };
     pendingCache: any;
   }> {
+    // temp cache store
+    const pendingCache: PendingCache = {};
+
     const maxRetries = 3;
     let attempts = 0;
 
@@ -50,6 +53,7 @@ export class AIClient {
         return await this.makeRequest(
           prompt,
           browserTool,
+          pendingCache,
           outputCallback,
           toolOutputCallback,
         );
@@ -75,6 +79,7 @@ export class AIClient {
   async makeRequest(
     prompt: string,
     browserTool: BrowserTool,
+    pendingCache: PendingCache,
     _outputCallback?: (
       content: Anthropic.Beta.Messages.BetaContentBlockParam,
     ) => void,
@@ -82,13 +87,10 @@ export class AIClient {
   ): Promise<{
     messages: any;
     finalResponse: any;
-    pendingCache: any;
+    pendingCache: PendingCache;
     tokenUsage: { input: number; output: number };
   }> {
     const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [];
-    // temp cache store
-    const pendingCache: Partial<{ steps?: CacheStep[] }> = {};
-
     // Log the conversation
     if (this.debugMode) {
       console.log(pc.cyan("\n🤖 Prompt:"), pc.dim(prompt));
@@ -101,7 +103,8 @@ export class AIClient {
 
     while (true) {
       try {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await browserTool.waitForStableDOM();
 
         const response = await this.client.beta.messages.create({
           model: this.model,
