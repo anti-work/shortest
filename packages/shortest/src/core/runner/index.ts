@@ -1,5 +1,8 @@
+import { readFileSync } from "fs";
 import { pathToFileURL } from "url";
 import Anthropic from "@anthropic-ai/sdk";
+import { parse } from "acorn";
+import { simple as walkSimple } from "acorn-walk";
 import { glob } from "glob";
 import { APIRequest, BrowserContext } from "playwright";
 import * as playwright from "playwright";
@@ -358,7 +361,88 @@ export class TestRunner {
     return { ...aiResult, tokenUsage: result.tokenUsage };
   }
 
-  private async executeTestFile(file: string) {
+  private filterTestsByLineNumber(
+    tests: TestFunction[],
+    file: string,
+    lineNumber: number,
+  ): TestFunction[] {
+    const fileContent = readFileSync(file, "utf8");
+    const ast = parse(fileContent, {
+      sourceType: "module",
+      ecmaVersion: "latest",
+      locations: true,
+    });
+
+    const testLocations: {
+      [testName: string]: { start: number; end: number };
+    } = {};
+
+    walkSimple(ast, {
+      CallExpression(node: any) {
+        if (
+          node.callee.type === "Identifier" &&
+          node.callee.name === "shortest"
+        ) {
+          const testNameArg = node.arguments[0];
+          if (
+            !testNameArg ||
+            testNameArg.type !== "Literal" ||
+            typeof testNameArg.value !== "string"
+          ) {
+            return;
+          }
+
+          const testName = testNameArg.value;
+
+          // Find the largest chain containing this shortest() call
+          let largestChain = {
+            start: node.loc?.start.line,
+            end: node.loc?.end.line,
+          };
+
+          walkSimple(ast, {
+            CallExpression(chainNode: any) {
+              if (
+                chainNode.loc.start.line === node.loc.start.line && // Same starting line as shortest()
+                chainNode.callee.type === "MemberExpression" &&
+                chainNode.callee.property.name === "expect"
+              ) {
+                // Update end line if this chain node ends later
+                if (chainNode.loc.end.line > largestChain.end!) {
+                  largestChain.end = chainNode.loc.end.line;
+                }
+              }
+            },
+          });
+
+          if (
+            largestChain.start !== undefined &&
+            largestChain.end !== undefined
+          ) {
+            testLocations[testName] = largestChain;
+          }
+        }
+      },
+    });
+
+    const filteredTests = tests.filter((test) => {
+      const location = testLocations[test.name];
+      if (!location) {
+        return false;
+      }
+      const isInRange =
+        lineNumber >= location.start && lineNumber <= location.end;
+      if (isInRange) {
+        console.log(`Test found for line number ${lineNumber}: ${test.name}`);
+      }
+
+      return isInRange;
+    });
+
+    return filteredTests;
+  }
+
+  private async executeTestFile(file: string, lineNumber?: number) {
     try {
       const registry = (global as any).__shortest__.registry;
 
@@ -371,6 +455,22 @@ export class TestRunner {
         compiledPath,
       });
       await import(pathToFileURL(compiledPath).href);
+      let testsToRun = registry.currentFileTests;
+
+      if (lineNumber) {
+        testsToRun = this.filterTestsByLineNumber(
+          registry.currentFileTests,
+          file,
+          lineNumber,
+        );
+        if (testsToRun.length === 0) {
+          this.reporter.error(
+            "Test Discovery",
+            `No tests found at line ${lineNumber} in ${filePathWithoutCwd}`,
+          );
+          process.exit(1);
+        }
+      }
 
       let context;
       try {
@@ -389,14 +489,11 @@ export class TestRunner {
           await hook(testContext);
         }
 
-        this.reporter.onFileStart(
-          filePathWithoutCwd,
-          registry.currentFileTests.length,
-        );
+        this.reporter.onFileStart(filePathWithoutCwd, testsToRun.length);
 
         // Execute tests in order they were defined
-        this.log.info(`Running ${registry.currentFileTests.length} test(s)`);
-        for (const test of registry.currentFileTests) {
+        this.log.info(`Running ${testsToRun.length} test(s)`);
+        for (const test of testsToRun) {
           // Execute beforeEach hooks with shared context
           for (const hook of registry.beforeEachFns) {
             await hook(testContext);
@@ -444,7 +541,7 @@ export class TestRunner {
     }
   }
 
-  async runTests(pattern?: string) {
+  async runTests(pattern?: string, lineNumber?: number) {
     await this.initialize();
     const files = await this.findTestFiles(pattern);
 
@@ -458,7 +555,7 @@ export class TestRunner {
 
     this.reporter.onRunStart(files.length);
     for (const file of files) {
-      await this.executeTestFile(file);
+      await this.executeTestFile(file, lineNumber);
     }
 
     this.reporter.onRunEnd();

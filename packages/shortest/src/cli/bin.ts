@@ -167,6 +167,16 @@ async function main() {
     ?.split("=")[1];
   const cliTestPattern = args.find((arg) => !arg.startsWith("--"));
   const noCache = args.includes("--no-cache");
+  let testFile: string | undefined;
+  let lineNumber: number | undefined;
+
+  if (cliTestPattern?.includes(":")) {
+    const [file, line] = cliTestPattern.split(":");
+    testFile = file;
+    lineNumber = parseInt(line, 10);
+  } else {
+    testFile = cliTestPattern;
+  }
 
   log.trace("Initializing TestRunner");
   try {
@@ -179,8 +189,8 @@ async function main() {
     );
     await runner.initialize();
     const config = getConfig();
-    const testPattern = cliTestPattern || config.testPattern;
-    await runner.runTests(testPattern);
+    const testPattern = testFile || config.testPattern;
+    await runner.runTests(testPattern, lineNumber);
   } catch (error: any) {
     console.error(pc.red(error.name), { message: error.message });
     process.exit(1);
