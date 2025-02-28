@@ -2,7 +2,7 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { LanguageModelV1FinishReason } from "@ai-sdk/provider";
 import {
   CoreMessage,
-  CoreTool,
+  Tool,
   generateText,
   LanguageModelV1,
   NoSuchToolError,
@@ -20,6 +20,7 @@ import { getConfig } from "@/index";
 import { getLogger, Log } from "@/log";
 import { ToolResult } from "@/types";
 import { TokenUsage, TokenUsageSchema } from "@/types/ai";
+import { ANTHROPIC_MODELS } from "@/types/config";
 import {
   getErrorDetails,
   AIError,
@@ -27,6 +28,46 @@ import {
   asShortestError,
 } from "@/utils/errors";
 import { sleep } from "@/utils/sleep";
+
+const CLAUDE_3_7_TOOLS = {
+  computer: "20250124",
+  bash: "20241022",
+  text: "20241022",
+};
+
+const CLAUDE_3_5_TOOLS = {
+  computer: "20241022",
+  bash: "20241022",
+  text: "20241022",
+};
+
+const toolTypeSchema = z.object({
+  computer: z.string(),
+  bash: z.string(),
+  text: z.string(),
+});
+
+const anthropicModelConfigSchema = z.record(
+  z.enum(ANTHROPIC_MODELS),
+  toolTypeSchema,
+);
+
+const ANTHROPIC_MODEL_TOOLS = {
+  "claude-3-7-sonnet-latest": CLAUDE_3_7_TOOLS,
+  "claude-3-7-sonnet-20250219": CLAUDE_3_7_TOOLS,
+  "claude-3-5-sonnet-latest": CLAUDE_3_5_TOOLS,
+  "claude-3-5-sonnet-20241022": CLAUDE_3_5_TOOLS,
+};
+
+const ANTHROPIC_MODEL_CONFIG = {
+  models: anthropicModelConfigSchema.parse(ANTHROPIC_MODEL_TOOLS),
+
+  tools: {
+    computer: (version: string) => `computer_${version}`,
+    bash: (version: string) => `bash_${version}`,
+    text: (version: string) => `text_${version}`,
+  },
+};
 
 /**
  * Response type for AI client operations.
@@ -87,7 +128,9 @@ export class AIClient {
   private log: Log;
   private usage: TokenUsage;
   private apiRequestCount: number = 0;
-  private _tools: Record<string, CoreTool> | null = null;
+  private _tools: Record<string, Tool> | null = null;
+  private modelName: string;
+  private toolVersion: typeof CLAUDE_3_7_TOOLS | typeof CLAUDE_3_5_TOOLS;
 
   constructor({
     browserTool,
@@ -98,10 +141,21 @@ export class AIClient {
   }) {
     this.log = getLogger();
     this.log.trace("Initializing AIClient");
-    this.client = createProvider(getConfig().ai);
+    const aiConfig = getConfig().ai;
+    this.client = createProvider(aiConfig);
     this.browserTool = browserTool;
     this.testCache = testCache;
     this.usage = TokenUsageSchema.parse({});
+
+    this.modelName = aiConfig.model;
+    this.toolVersion = this.getToolVersionForModel(
+      this.modelName as keyof typeof ANTHROPIC_MODEL_TOOLS,
+    );
+
+    this.log.trace("Using model", {
+      model: this.modelName,
+      toolVersion: this.toolVersion,
+    });
     this.log.trace(
       "Available tools",
       Object.fromEntries(
@@ -111,6 +165,27 @@ export class AIClient {
         ]),
       ),
     );
+  }
+
+  /**
+   * Determines which tool version to use based on the model name
+   */
+  private getToolVersionForModel(
+    modelName: keyof typeof ANTHROPIC_MODEL_TOOLS,
+  ): typeof CLAUDE_3_7_TOOLS | typeof CLAUDE_3_5_TOOLS {
+    return ANTHROPIC_MODEL_CONFIG.models[modelName]!;
+  }
+
+  /**
+   * Gets the appropriate tool factory function for a given tool type and version
+   */
+  private getToolFactory(
+    toolType: keyof typeof ANTHROPIC_MODEL_CONFIG.tools,
+  ): any {
+    const toolName = ANTHROPIC_MODEL_CONFIG.tools[toolType](
+      this.toolVersion[toolType],
+    );
+    return (anthropic.tools as any)[toolName];
   }
 
   /**
@@ -290,18 +365,22 @@ export class AIClient {
    * Retrieves or initializes the set of available tools for AI interactions.
    * Includes browser automation, bash execution, and specialized testing tools.
    *
-   * @returns {Record<string, CoreTool>} Map of available tools
+   * @returns {Record<string, Tool>} Map of available tools
    *
    * @see {@link BrowserTool} for web automation tools
    * @see {@link BashTool} for shell command execution
    *
    * @private
    */
-  private get tools(): Record<string, CoreTool> {
+  private get tools(): Record<string, Tool> {
     if (this._tools) return this._tools;
 
+    // Get appropriate tool factory functions based on version
+    const computerTool = this.getToolFactory("computer");
+    const bashTool = this.getToolFactory("bash");
+
     this._tools = {
-      computer: anthropic.tools.computer_20241022({
+      computer: computerTool({
         displayWidthPx: 1920,
         displayHeightPx: 1080,
         displayNumber: 0,
@@ -309,9 +388,10 @@ export class AIClient {
         experimental_toToolResultContent:
           this.browserToolResultToToolResultContent,
       }),
-      bash: anthropic.tools.bash_20241022({
-        execute: async ({ command }) => await new BashTool().execute(command),
-        experimental_toToolResultContent(result) {
+      bash: bashTool({
+        execute: async ({ command }: { command: string }) =>
+          await new BashTool().execute(command),
+        experimental_toToolResultContent(result: string) {
           return [
             {
               type: "text",
