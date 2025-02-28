@@ -40,7 +40,7 @@ describe("initializeConfig", () => {
       ai: {
         provider: "anthropic",
         apiKey: "test-key",
-        model: "claude-3-5-sonnet-20241022",
+        model: "claude-3-7-sonnet-20250219",
       },
       caching: {
         enabled: true,
@@ -59,7 +59,7 @@ describe("initializeConfig", () => {
         ai: {
           provider: "anthropic",
           apiKey: "test-key",
-          model: "claude-3-5-sonnet-20241022",
+          model: "claude-3-7-sonnet-20250219",
         },
       }
       `,
@@ -74,7 +74,7 @@ describe("initializeConfig", () => {
       ai: {
         provider: "anthropic",
         apiKey: "test-key",
-        model: "claude-3-5-sonnet-20241022",
+        model: "claude-3-7-sonnet-20250219",
       },
       caching: {
         enabled: true,
@@ -158,7 +158,7 @@ describe("initializeConfig", () => {
         ai: {
           provider: "anthropic",
           apiKey: "test-key",
-          model: "claude-3-5-sonnet-20241022",
+          model: "claude-3-7-sonnet-20250219",
         },
         caching: {
           enabled: false,

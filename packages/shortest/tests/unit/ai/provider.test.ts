@@ -11,18 +11,18 @@ describe("createProvider", () => {
     const config: AIConfig = {
       provider: "anthropic",
       apiKey: "test-key",
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-3-7-sonnet-20250219",
     };
 
     const provider = createProvider(config);
-    expect(provider).toEqual({ model: "claude-3-5-sonnet-20241022" });
+    expect(provider).toEqual({ model: "claude-3-7-sonnet-20250219" });
   });
 
   it("throws AIError for unsupported provider", () => {
     const config = {
       provider: "unsupported",
       apiKey: "test-key",
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-3-7-sonnet-20250219",
     } as unknown as AIConfig;
 
     expect(() => createProvider(config)).toThrow(

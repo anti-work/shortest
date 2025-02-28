@@ -30,7 +30,7 @@ describe("Config parsing", () => {
       expect(config.testPattern).toBe("**/*.test.ts");
       expect(config.ai).toEqual({
         apiKey: "foo",
-        model: "claude-3-5-sonnet-20241022",
+        model: "claude-3-7-sonnet-20250219",
         provider: "anthropic",
       });
       expect(config.caching).toEqual({
@@ -112,7 +112,7 @@ describe("Config parsing", () => {
           expect(config.ai).toEqual({
             apiKey: "env-api-key",
             provider: "anthropic",
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-7-sonnet-20250219",
           });
         });
       });
@@ -134,7 +134,7 @@ describe("Config parsing", () => {
           expect(config.ai).toEqual({
             apiKey: "shortest-env-api-key",
             provider: "anthropic",
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-7-sonnet-20250219",
           });
         });
       });
@@ -146,7 +146,7 @@ describe("Config parsing", () => {
           expect(config.ai).toEqual({
             apiKey: "explicit-api-key",
             provider: "anthropic",
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-7-sonnet-20250219",
           });
         });
       });
@@ -186,7 +186,7 @@ describe("Config parsing", () => {
           ai: { ...baseConfig.ai, model: "invalid-model" as any },
         };
         expect(() => parseConfig(userConfig)).toThrowError(
-          /Invalid shortest\.config\n(?:\u001b\[\d+m)?ai\.model(?:\u001b\[\d+m)?: Invalid enum value\. Expected 'claude-3-5-sonnet-20241022', received 'invalid-model'(?:\s\(received: "invalid-model"\))?/,
+          /Invalid shortest\.config\n(?:\u001b\[\d+m)?ai\.model(?:\u001b\[\d+m)?: Invalid enum value\. Expected 'claude-3-7-sonnet-20250219', received 'invalid-model'(?:\s\(received: "invalid-model"\))?/,
         );
       });
     });
@@ -212,7 +212,7 @@ describe("Config parsing", () => {
           expect(config.ai).toEqual({
             provider: "anthropic",
             apiKey: "deprecated-api-key",
-            model: "claude-3-5-sonnet-20241022",
+            model: "claude-3-7-sonnet-20250219",
           });
         });
       });
