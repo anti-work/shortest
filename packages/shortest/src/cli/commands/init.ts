@@ -3,15 +3,26 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "path";
 import type { Readable } from "stream";
 import { fileURLToPath } from "url";
+import { select, input, confirm } from "@inquirer/prompts";
+import { ListrInquirerPromptAdapter } from "@listr2/prompt-adapter-inquirer";
 import { Command, Option } from "commander";
-import { Listr } from "listr2";
+import { delay, Listr } from "listr2";
 import { detect, resolveCommand } from "package-manager-detector";
 import pc from "picocolors";
 import { DOT_SHORTEST_DIR_NAME } from "@/cache";
 import { executeCommand } from "@/cli/utils/command-builder";
 import { CONFIG_FILENAME, ENV_LOCAL_FILENAME } from "@/constants";
+import {
+  AppAnalyzer,
+  detectSupportedFramework,
+  SupportedFramework,
+} from "@/core/app-analyzer";
+import { detectFramework } from "@/core/framework-detector";
+import { TestGenerator } from "@/core/test-generator";
+import { TestPlanner } from "@/core/test-planner";
 import { LOG_LEVELS } from "@/log/config";
 import { addToGitignore } from "@/utils/add-to-gitignore";
+import { assertDefined } from "@/utils/assert";
 import { EnvFile } from "@/utils/env-file";
 import { ShortestError } from "@/utils/errors";
 
@@ -43,25 +54,34 @@ initCommand
     });
   });
 
+interface Ctx {
+  alreadyInstalled: boolean;
+  anthropicApiKeyExists: boolean;
+  anthropicApiKeyName: string;
+  anthropicApiKeyValueNeeded: boolean;
+  anthropicApiKeyValue: string;
+  envFile: EnvFile;
+  generateSampleTestFile: boolean;
+  supportedFramework: SupportedFramework | null;
+}
+
 export const executeInitCommand = async () => {
-  const tasks = new Listr(
+  const tasks = new Listr<Ctx>(
     [
       {
         title: "Checking for existing installation",
         task: async (ctx, task): Promise<void> => {
+          await delay(5000);
           const packageJson = await getPackageJson();
           ctx.alreadyInstalled = !!(
             packageJson?.dependencies?.["@antiwork/shortest"] ||
             packageJson?.devDependencies?.["@antiwork/shortest"]
           );
           if (ctx.alreadyInstalled) {
-            task.output = `Shortest is already installed`;
+            task.title = `Shortest is already installed`;
           } else {
-            task.output = "Shortest is not installed, starting installation.";
+            task.title = "Shortest is not installed, starting installation.";
           }
-        },
-        rendererOptions: {
-          persistentOutput: true,
         },
       },
       {
@@ -74,21 +94,7 @@ export const executeInitCommand = async () => {
         },
         rendererOptions: {
           persistentOutput: true,
-        },
-      },
-      {
-        title: `Creating ${CONFIG_FILENAME}`,
-        enabled: (ctx): boolean => !ctx.alreadyInstalled,
-        task: async (_, task) => {
-          const configPath = join(process.cwd(), CONFIG_FILENAME);
-          const exampleConfigPath = join(
-            fileURLToPath(new URL("../../src", import.meta.url)),
-            `${CONFIG_FILENAME}.example`,
-          );
-
-          const exampleConfig = await readFile(exampleConfigPath, "utf8");
-          await writeFile(configPath, exampleConfig, "utf8");
-          task.title = `${CONFIG_FILENAME} created.`;
+          bottomBar: 5,
         },
       },
       {
@@ -109,19 +115,122 @@ export const executeInitCommand = async () => {
                 },
               },
               {
-                title: `Adding ANTHROPIC_API_KEY`,
-                task: async (ctx, task) => {
-                  const keyAdded = await ctx.envFile.add({
-                    key: "ANTHROPIC_API_KEY",
-                    value: "your_value_here",
-                    comment: "Shortest variables",
-                  });
-                  if (keyAdded) {
-                    task.title = `ANTHROPIC_API_KEY added`;
-                  } else {
-                    task.title = `ANTHROPIC_API_KEY already exists, skipped`;
-                  }
-                },
+                title: `Adding Anthropic API key`,
+                task: async (_, task): Promise<Listr> =>
+                  task.newListr([
+                    {
+                      title: "Checking for Anthropic API key",
+                      task: async (ctx, _) => {
+                        ctx.anthropicApiKeyExists = ctx.envFile.keyExists(
+                          ctx.envFile.keyExists("ANTHROPIC_API_KEY"),
+                        );
+                      },
+                    },
+                    {
+                      title: "Select Anthropic API key name",
+                      task: async (ctx, task) =>
+                        (ctx.anthropicApiKeyName = await task
+                          .prompt(ListrInquirerPromptAdapter)
+                          .run(select, {
+                            message: ctx.anthropicApiKeyExists
+                              ? "Anthropic API key already exists. Select the name of the key you want to use."
+                              : "Select the name of the Anthropic API key you want to use.",
+                            choices: [
+                              {
+                                name: "ANTHROPIC_API_KEY",
+                                value: "ANTHROPIC_API_KEY",
+                                description: ctx.anthropicApiKeyExists
+                                  ? "Use existing API key"
+                                  : "Use the default API key name",
+                              },
+                              {
+                                name: "SHORTEST_ANTHROPIC_API_KEY",
+                                value: "SHORTEST_ANTHROPIC_API_KEY",
+                                description:
+                                  "Use a dedicated API key for Shortest",
+                              },
+                            ],
+                          })),
+                    },
+                    {
+                      title: "Enter API key value",
+                      enabled: (ctx): boolean => !ctx.anthropicApiKeyExists,
+                      task: async (ctx, task) =>
+                        (ctx.anthropicApiKeyValue = await task
+                          .prompt(ListrInquirerPromptAdapter)
+                          .run(input, {
+                            message: `Enter value for ${ctx.anthropicApiKeyName}`,
+                            required: true,
+                          })),
+                    },
+                    {
+                      title: "Saving API key",
+                      enabled: (ctx): boolean => !!ctx.anthropicApiKeyValue,
+                      task: async (ctx, task) => {
+                        const keyAdded = await ctx.envFile.add({
+                          key: ctx.anthropicApiKeyName,
+                          value: ctx.anthropicApiKeyValue,
+                        });
+                        if (keyAdded) {
+                          task.title = `${ctx.anthropicApiKeyName} added`;
+                        } else {
+                          task.title = `${ctx.anthropicApiKeyName} already exists, skipped`;
+                        }
+                      },
+                    },
+                  ]),
+              },
+              {
+                title: "Adding Shortest login credentials for testing",
+                task: async (_, task): Promise<Listr> =>
+                  task.newListr([
+                    {
+                      title: "Enter the email for the test account",
+                      task: async (ctx, task) =>
+                        (ctx.shortestLoginEmail = await task
+                          .prompt(ListrInquirerPromptAdapter)
+                          .run(input, {
+                            message: `Enter value for SHORTEST_LOGIN_EMAIL`,
+                          })),
+                    },
+                    {
+                      title: "Saving SHORTEST_LOGIN_EMAIL key",
+                      task: async (ctx, task) => {
+                        const keyAdded = await ctx.envFile.add({
+                          key: "SHORTEST_LOGIN_EMAIL",
+                          value: ctx.shortestLoginEmail,
+                        });
+                        if (keyAdded) {
+                          task.title = `SHORTEST_LOGIN_EMAIL added`;
+                        } else {
+                          task.title = `SHORTEST_LOGIN_EMAIL already exists, skipped`;
+                        }
+                      },
+                    },
+                    {
+                      title: "Enter the password for the test account",
+                      task: async (ctx, task) =>
+                        (ctx.shortestLoginPassword = await task
+                          .prompt(ListrInquirerPromptAdapter)
+                          .run(input, {
+                            message: `Enter value for SHORTEST_LOGIN_PASSWORD`,
+                          })),
+                    },
+                    {
+                      title: "Saving SHORTEST_LOGIN_EMAIL key",
+                      task: async (ctx, task) => {
+                        const keyAdded = await ctx.envFile.add({
+                          key: "SHORTEST_LOGIN_PASSWORD",
+                          value: ctx.shortestLoginPassword,
+                        });
+                        if (keyAdded) {
+                          task.title = `SHORTEST_LOGIN_PASSWORD added`;
+                        } else {
+                          task.title = `SHORTEST_LOGIN_PASSWORD already exists, skipped`;
+                        }
+                      },
+                    },
+                  ]),
               },
             ],
             {
@@ -130,6 +239,21 @@ export const executeInitCommand = async () => {
               },
             },
           ),
+      },
+      {
+        title: `Creating ${CONFIG_FILENAME}`,
+        enabled: (ctx): boolean => !ctx.alreadyInstalled,
+        task: async (_, task) => {
+          const configPath = join(process.cwd(), CONFIG_FILENAME);
+          const exampleConfigPath = join(
+            fileURLToPath(new URL("../../src", import.meta.url)),
+            `${CONFIG_FILENAME}.example`,
+          );
+
+          const exampleConfig = await readFile(exampleConfigPath, "utf8");
+          await writeFile(configPath, exampleConfig, "utf8");
+          task.title = `${CONFIG_FILENAME} created.`;
+        },
       },
       {
         title: "Updating .gitignore",
@@ -149,8 +273,69 @@ export const executeInitCommand = async () => {
           task.title = `.gitignore ${resultGitignore.wasCreated ? "created" : "updated"}`;
         },
       },
+      {
+        title: "Generating sample test file",
+        task: async (ctx, task) =>
+          (ctx.generateSampleTestFile = await task
+            .prompt(ListrInquirerPromptAdapter)
+            .run(confirm, {
+              message: "Do you want to generate a sample test file?",
+              default: true,
+            })),
+      },
+      {
+        title: "Detecting Next.js framework",
+        enabled: (ctx): boolean => ctx.generateSampleTestFile,
+        task: async (ctx, task) => {
+          await detectFramework({ force: true });
+          try {
+            ctx.supportedFramework = await detectSupportedFramework();
+            task.title = `Next.js framework detected`;
+          } catch (error) {
+            if (!(error instanceof ShortestError)) throw error;
+            task.title = `Next.js framework not detected (${error.message})`;
+          }
+        },
+      },
+      {
+        title: "Analyzing the codebase",
+        enabled: (ctx): boolean => !!ctx.supportedFramework,
+        task: async (ctx, task) => {
+          const supportedFramework = assertDefined(ctx.supportedFramework);
+          const analyzer = new AppAnalyzer(process.cwd(), supportedFramework);
+          await analyzer.execute({ force: true });
+          task.title = "Analysis complete";
+        },
+        rendererOptions: {
+          bottomBar: 5,
+        },
+      },
+      {
+        title: "Creating test plans",
+        enabled: (ctx): boolean => !!ctx.supportedFramework,
+        task: async (ctx, task) => {
+          const supportedFramework = assertDefined(ctx.supportedFramework);
+          const planner = new TestPlanner(process.cwd(), supportedFramework);
+          await planner.execute({ force: true });
+          task.title = `Test planning complete`;
+        },
+      },
+      {
+        title: "Generating test file",
+        enabled: (ctx): boolean => !!ctx.supportedFramework,
+        task: async (ctx, task) => {
+          const supportedFramework = assertDefined(ctx.supportedFramework);
+          const generator = new TestGenerator(
+            process.cwd(),
+            supportedFramework,
+          );
+          await generator.execute({ force: true });
+          task.title = "Test file generated";
+        },
+      },
     ],
     {
+      renderer: "default",
       exitOnError: true,
       concurrent: false,
       rendererOptions: {
@@ -162,7 +347,6 @@ export const executeInitCommand = async () => {
   try {
     await tasks.run();
     console.log(pc.green("\nInitialization complete! Next steps:"));
-    console.log(`1. Update ${ENV_LOCAL_FILENAME} with your values`);
     console.log("2. Create your first test file: example.test.ts");
     console.log("3. Run tests with: npx/pnpm test example.test.ts");
   } catch (error) {
